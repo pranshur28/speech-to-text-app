@@ -8,11 +8,11 @@ export class PasteService {
         const buffer = Buffer.from(text, 'utf8');
         execSync('pbcopy', { input: buffer });
       } else if (process.platform === 'win32') {
-        // Windows - use clip via PowerShell
-        const escapedText = text.replace(/"/g, '""');
-        execSync(`powershell.exe -Command "Set-Clipboard -Value @'${text}'@"`, {
+        // Windows - use clip via stdin to avoid command injection
+        const buffer = Buffer.from(text, 'utf8');
+        execSync('powershell.exe -Command "$input | Set-Clipboard"', {
+          input: buffer,
           encoding: 'utf8',
-          shell: 'powershell.exe'
         });
       } else {
         // Linux - use xclip if available, otherwise try xsel

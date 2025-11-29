@@ -90,7 +90,7 @@ The app stores settings in browser localStorage. You can:
 
 - Your API key is stored locally on your computer (in `.env`)
 - Audio is sent to OpenAI's servers for transcription
-- The formatting request is sent to OpenAI (using Claude)
+- The formatting request is sent to OpenAI (using GPT-4o-mini)
 - No data is stored persistently by this application
 - Each session is independent
 
@@ -125,8 +125,8 @@ This creates installer files for your platform in the `out/` directory.
 - **Electron**: Desktop application framework
 - **React**: UI components
 - **TypeScript**: Type-safe JavaScript
-- **OpenAI API**: Whisper (transcription) + Claude (formatting)
-- **robotjs**: Text pasting and keyboard simulation
+- **OpenAI API**: Whisper (transcription) + GPT-4o-mini (formatting)
+- **uiohook-napi**: Global keyboard shortcuts
 
 ## License
 

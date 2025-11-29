@@ -1,0 +1,27 @@
+.overlay-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+}
+
+.soundwave-container {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.soundwave-bar {
+    width: 4px;
+    min-height: 4px;
+    background: linear-gradient(to top, #6366f1, #a5b4fc);
+    border-radius: 2px;
+    transition: height 0.05s ease-out, opacity 0.05s ease-out;
+}
