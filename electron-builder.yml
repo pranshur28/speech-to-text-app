@@ -1,0 +1,31 @@
+appId: com.speechtotext.app
+productName: Speech to Text
+directories:
+  buildResources: assets
+files:
+  - dist/**/*
+  - build/**/*
+  - node_modules/**/*
+  - package.json
+
+win:
+  target:
+    - nsis
+    - portable
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.productivity
+  entitlements: ./entitlements.mac.plist
+  entitlementsInherit: ./entitlements.mac.plist
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office

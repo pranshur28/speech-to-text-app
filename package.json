@@ -1,0 +1,36 @@
+{
+  "name": "speech-to-text-app",
+  "version": "1.0.0",
+  "description": "Desktop app for speech-to-text with LLM formatting",
+  "main": "dist/main.js",
+  "homepage": "./",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"npm run build:main:watch\"",
+    "dev:electron": "concurrently \"vite\" \"npm run build:main:watch\" \"wait-on dist/main.js && electron .\"",
+    "build": "npm run build:main && npm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:main:watch": "tsc -p tsconfig.main.json --watch",
+    "build:renderer": "vite build",
+    "preview": "vite preview",
+    "start": "electron .",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "openai": "^4.28.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "wait-on": "^7.1.0"
+  }
+}
