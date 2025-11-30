@@ -2,9 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import './styles.css';
 
 interface Transcription {
-  id: string;
-  text: string;
+  id: number;
+  raw_text: string;
+  formatted_text: string;
   timestamp: number;
+  formatting_profile: string;
+  is_favorite: number;
+  created_at: number;
 }
 
 export default function App() {
@@ -59,6 +63,11 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // API Key State
+  const [apiKey, setApiKey] = useState('');
+  const [apiKeySaveStatus, setApiKeySaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [apiKeySaveMessage, setApiKeySaveMessage] = useState('');
+
   // Settings State
   const [pushToTalk, setPushToTalk] = useState(() => {
     const saved = localStorage.getItem('pushToTalk');
@@ -76,6 +85,7 @@ export default function App() {
   const [recordingTarget, setRecordingTarget] = useState<'toggle' | 'hold' | null>(null);
   const [pressedKeys, setPressedKeys] = useState<string[]>([]);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
+  const [shortcutWarning, setShortcutWarning] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -84,7 +94,7 @@ export default function App() {
   const isProcessingRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
+  const audioDataIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -100,7 +110,23 @@ export default function App() {
     window.electronAPI.getApiKeyStatus().then((status) => {
       if (!status.valid) {
         setErrorMessage(status.error || 'API key error');
+        // Auto-open settings if no API key
+        setIsSettingsOpen(true);
       }
+    });
+
+    // Load API key
+    window.electronAPI.getApiKey().then((key) => {
+      setApiKey(key);
+    });
+
+    // Load recent transcriptions from database
+    window.electronAPI.dbGetTranscriptions({ limit: 20 }).then((result) => {
+      if (result.success) {
+        setRecentTranscriptions(result.transcriptions);
+      }
+    }).catch((error) => {
+      console.error('Error loading transcriptions:', error);
     });
 
     // Load initial shortcuts
@@ -148,6 +174,17 @@ export default function App() {
       e.preventDefault();
       e.stopPropagation();
 
+      // Ignore if this is just a modifier key press
+      if (['Control', 'Meta', 'Alt', 'Shift'].includes(e.key)) {
+        const keys: string[] = [];
+        if (e.metaKey) keys.push('Command');
+        if (e.ctrlKey) keys.push('Ctrl');
+        if (e.altKey) keys.push('Alt');
+        if (e.shiftKey) keys.push('Shift');
+        setPressedKeys(keys);
+        return;
+      }
+
       // Build the shortcut string
       const keys: string[] = [];
       if (e.metaKey) keys.push('Command');
@@ -166,6 +203,16 @@ export default function App() {
       if (triggerKey) {
         const shortcutString = keys.join('+');
         console.log(`[DEBUG] Shortcut recorded: "${shortcutString}" (target: ${recordingTarget}, keys:`, keys, ', triggerKey:', triggerKey, ')');
+
+        // Check if this is a single letter/number key without modifiers (warn about common keys)
+        const hasModifiers = e.metaKey || e.ctrlKey || e.altKey || (e.shiftKey && triggerKey.length > 1);
+        const isCommonKey = /^[A-Z]$/.test(triggerKey) || triggerKey === 'Space';
+
+        if (!hasModifiers && isCommonKey && recordingTarget === 'hold') {
+          setShortcutWarning(`Using "${triggerKey}" alone will capture it globally. This may interfere with typing in other apps.`);
+        } else {
+          setShortcutWarning(null);
+        }
 
         if (recordingTarget === 'toggle') {
           setToggleShortcut(shortcutString);
@@ -215,45 +262,43 @@ export default function App() {
       const source = audioContext.createMediaStreamSource(stream);
       source.connect(analyser);
 
-      // Start sending volume data to overlay
+      // Start sending volume data to overlay using setInterval (works even when app is not focused)
       const dataArray = new Uint8Array(analyser.fftSize);
       const frequencyData = new Uint8Array(analyser.frequencyBinCount);
-      let lastSendTime = 0;
-      const sendAudioData = (timestamp: number) => {
+
+      const sendAudioData = () => {
         if (!isRecordingRef.current) return;
 
-        // Throttle to ~60fps (16ms) for smoother animation
-        if (timestamp - lastSendTime >= 16) {
-          analyser.getByteTimeDomainData(dataArray);
-          analyser.getByteFrequencyData(frequencyData);
+        analyser.getByteTimeDomainData(dataArray);
+        analyser.getByteFrequencyData(frequencyData);
 
-          // Calculate RMS (Root Mean Square) for volume
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            const amplitude = (dataArray[i] - 128) / 128;
-            sum += amplitude * amplitude;
-          }
-          const rms = Math.sqrt(sum / dataArray.length);
+        // Calculate RMS (Root Mean Square) for volume
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const amplitude = (dataArray[i] - 128) / 128;
+          sum += amplitude * amplitude;
+        }
+        const rms = Math.sqrt(sum / dataArray.length);
 
-          // Normalize to 0-1 range (approximate) and send
-          // Boost low volumes slightly
-          const volume = Math.min(1, rms * 5);
+        // Normalize to 0-1 range (approximate) and send
+        // Boost low volumes slightly
+        const volume = Math.min(1, rms * 5);
 
-          // Sample frequency data for waveform bars (take 16 bars from low-mid frequencies)
-          const barCount = 16;
-          const waveform: number[] = [];
-          for (let i = 0; i < barCount; i++) {
-            const freqIndex = Math.floor(i * (frequencyData.length / 4) / barCount);
-            waveform.push(frequencyData[freqIndex] / 255);
-          }
-
-          window.electronAPI.sendAudioData({ volume, waveform });
-          lastSendTime = timestamp;
+        // Sample frequency data for waveform bars (take 16 bars from low-mid frequencies)
+        const barCount = 16;
+        const waveform: number[] = [];
+        for (let i = 0; i < barCount; i++) {
+          const freqIndex = Math.floor(i * (frequencyData.length / 4) / barCount);
+          waveform.push(frequencyData[freqIndex] / 255);
         }
 
-        animationFrameRef.current = requestAnimationFrame(sendAudioData);
+        console.log('[APP] Sending audio data:', { volume, waveform: waveform.slice(0, 3) });
+        window.electronAPI.sendAudioData({ volume, waveform });
       };
-      requestAnimationFrame(sendAudioData);
+
+      // Use setInterval instead of requestAnimationFrame to ensure it works even when app is not focused
+      // ~60fps (16ms) for smoother animation
+      audioDataIntervalRef.current = setInterval(sendAudioData, 16);
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus',
@@ -278,9 +323,9 @@ export default function App() {
     if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
 
     // Stop audio analysis
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
+    if (audioDataIntervalRef.current) {
+      clearInterval(audioDataIntervalRef.current);
+      audioDataIntervalRef.current = null;
     }
 
     const mediaRecorder = mediaRecorderRef.current;
@@ -308,12 +353,22 @@ export default function App() {
           const formatResult = await window.electronAPI.formatText(transcribeResult.transcript);
 
           if (formatResult.success) {
-            const newTranscription: Transcription = {
-              id: Date.now().toString(),
-              text: formatResult.formatted,
-              timestamp: Date.now()
-            };
-            setRecentTranscriptions(prev => [newTranscription, ...prev].slice(0, 20));
+            // Save to database
+            const dbResult = await window.electronAPI.dbSaveTranscription({
+              raw_text: transcribeResult.transcript,
+              formatted_text: formatResult.formatted,
+              timestamp: Date.now(),
+              formatting_profile: 'casual',
+              is_favorite: 0
+            });
+
+            if (dbResult.success) {
+              // Reload transcriptions from database
+              const reloadResult = await window.electronAPI.dbGetTranscriptions({ limit: 20 });
+              if (reloadResult.success) {
+                setRecentTranscriptions(reloadResult.transcriptions);
+              }
+            }
 
             setStatus('Pasting...');
             await window.electronAPI.pasteText(formatResult.formatted);
@@ -348,9 +403,9 @@ export default function App() {
     if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
 
     // Stop audio analysis
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
+    if (audioDataIntervalRef.current) {
+      clearInterval(audioDataIntervalRef.current);
+      audioDataIntervalRef.current = null;
     }
 
     // Stop and discard recording
@@ -394,6 +449,33 @@ export default function App() {
       } else {
         startRecording();
       }
+    }
+  };
+
+  const handleSaveApiKey = async () => {
+    setApiKeySaveStatus('saving');
+    setApiKeySaveMessage('');
+
+    try {
+      const result = await window.electronAPI.saveApiKey(apiKey);
+
+      if (result.success) {
+        setApiKeySaveStatus('success');
+        setApiKeySaveMessage('API key saved successfully!');
+        setErrorMessage(null);
+
+        // Clear success message after 3 seconds
+        setTimeout(() => {
+          setApiKeySaveStatus('idle');
+          setApiKeySaveMessage('');
+        }, 3000);
+      } else {
+        setApiKeySaveStatus('error');
+        setApiKeySaveMessage(result.error || 'Failed to save API key');
+      }
+    } catch (error: any) {
+      setApiKeySaveStatus('error');
+      setApiKeySaveMessage(error?.message || 'Failed to save API key');
     }
   };
 
@@ -458,7 +540,7 @@ export default function App() {
                   <div className="recent-meta">
                     <span>{new Date(item.timestamp).toLocaleTimeString()}</span>
                   </div>
-                  {item.text}
+                  {item.formatted_text}
                 </div>
               ))
             )}
@@ -474,6 +556,63 @@ export default function App() {
           <div className="modal-header">
             <div className="modal-title">Settings</div>
             <button className="close-btn" onClick={() => setIsSettingsOpen(false)}>×</button>
+          </div>
+
+          <div className="setting-group">
+            <label className="setting-label">OpenAI API Key</label>
+            <div className="setting-description">
+              Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: '#646cff' }}>platform.openai.com/api-keys</a>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <input
+                type="password"
+                className="api-key-input"
+                placeholder="sk-..."
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontFamily: 'monospace'
+                }}
+              />
+              <button
+                onClick={handleSaveApiKey}
+                disabled={apiKeySaveStatus === 'saving'}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: apiKeySaveStatus === 'success' ? '#10b981' : '#646cff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: apiKeySaveStatus === 'saving' ? 'not-allowed' : 'pointer',
+                  opacity: apiKeySaveStatus === 'saving' ? 0.6 : 1,
+                  transition: 'all 0.2s'
+                }}
+              >
+                {apiKeySaveStatus === 'saving' ? 'Saving...' : apiKeySaveStatus === 'success' ? 'Saved!' : 'Save'}
+              </button>
+            </div>
+            {apiKeySaveMessage && (
+              <div style={{
+                marginTop: '8px',
+                padding: '8px 12px',
+                backgroundColor: apiKeySaveStatus === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                border: `1px solid ${apiKeySaveStatus === 'error' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+                borderRadius: '6px',
+                fontSize: '12px',
+                color: apiKeySaveStatus === 'error' ? '#ef4444' : '#10b981'
+              }}>
+                {apiKeySaveMessage}
+              </div>
+            )}
           </div>
 
           <div className="setting-group">
@@ -513,6 +652,9 @@ export default function App() {
 
           <div className="setting-group">
             <label className="setting-label">Hold to Talk Shortcut</label>
+            <div className="setting-description" style={{ marginBottom: '8px' }}>
+              Press and hold key to record, release to stop and paste. You can use any key - try F13-F24, CapsLock, or less common letters. Single keys like K will work but may interfere with typing.
+            </div>
             <div className="shortcut-recorder">
               <div
                 className={`shortcut-display ${recordingTarget === 'hold' ? 'recording' : ''}`}
@@ -520,22 +662,25 @@ export default function App() {
                   setRecordingTarget('hold');
                   setPressedKeys([]);
                   setShortcutError(null);
+                  setShortcutWarning(null);
                 }}
               >
                 {recordingTarget === 'hold'
-                  ? (pressedKeys.length > 0 ? pressedKeys.join('+') : 'Press keys...')
-                  : (holdShortcut || 'None')}
+                  ? (pressedKeys.length > 0 ? pressedKeys.join('+') : 'Press any key...')
+                  : (holdShortcut || 'Click to set')}
               </div>
               {recordingTarget === 'hold' ? (
                 <button className="cancel-record-btn" onClick={(e) => {
                   e.stopPropagation();
                   setRecordingTarget(null);
                   setPressedKeys([]);
+                  setShortcutWarning(null);
                 }}>Cancel</button>
               ) : (
                 <button className="reset-btn" onClick={() => {
                   setHoldShortcut('');
                   window.electronAPI.setHoldShortcut('');
+                  setShortcutWarning(null);
                 }} title="Clear Shortcut">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -544,6 +689,19 @@ export default function App() {
                 </button>
               )}
             </div>
+            {shortcutWarning && (
+              <div className="shortcut-warning" style={{
+                marginTop: '8px',
+                padding: '8px 12px',
+                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                border: '1px solid rgba(255, 193, 7, 0.3)',
+                borderRadius: '6px',
+                fontSize: '12px',
+                color: '#ffc107'
+              }}>
+                ⚠️ {shortcutWarning}
+              </div>
+            )}
           </div>
 
           <div className="setting-group">

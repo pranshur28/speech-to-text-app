@@ -8,8 +8,11 @@ export default function Overlay() {
         // Make body transparent for overlay window
         document.body.style.background = 'transparent';
 
+        console.log('[OVERLAY] Component mounted, waiting for audio data...');
+
         // Listen for audio data from main app
         const unsubscribe = window.electronAPI.onAudioData((data: any) => {
+            console.log('[OVERLAY] Received audio data:', data);
             if (data?.waveform) {
                 setWaveform(data.waveform);
             }

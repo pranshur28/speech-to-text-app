@@ -15,6 +15,18 @@ export interface IElectronAPI {
   sendAudioData: (data: any) => void;
   onAudioData: (callback: (data: any) => void) => () => void;
   getApiKeyStatus: () => Promise<{ valid: boolean; error: string | null }>;
+  getApiKey: () => Promise<string>;
+  saveApiKey: (apiKey: string) => Promise<{ success: boolean; error: string | null }>;
+  // Database API
+  dbSaveTranscription: (data: any) => Promise<{ success: boolean; id: number }>;
+  dbGetTranscription: (id: number) => Promise<{ success: boolean; transcription: any }>;
+  dbGetTranscriptions: (filters?: any) => Promise<{ success: boolean; transcriptions: any[] }>;
+  dbSearch: (query: string, filters?: any) => Promise<{ success: boolean; transcriptions: any[]; total: number; hasMore: boolean }>;
+  dbUpdateTranscription: (id: number, updates: any) => Promise<{ success: boolean }>;
+  dbDeleteTranscription: (id: number) => Promise<{ success: boolean }>;
+  dbToggleFavorite: (id: number) => Promise<{ success: boolean }>;
+  dbExport: (ids: number[], format: 'json' | 'markdown' | 'txt') => Promise<{ success: boolean; data: string }>;
+  dbGetStats: () => Promise<{ success: boolean; stats: { total: number; favorites: number; totalTags: number } }>;
 }
 
 const electronAPI: IElectronAPI = {
@@ -45,6 +57,18 @@ const electronAPI: IElectronAPI = {
     return () => ipcRenderer.removeListener('audio-data', handler);
   },
   getApiKeyStatus: () => ipcRenderer.invoke('get-api-key-status'),
+  getApiKey: () => ipcRenderer.invoke('get-api-key'),
+  saveApiKey: (apiKey: string) => ipcRenderer.invoke('save-api-key', apiKey),
+  // Database API
+  dbSaveTranscription: (data: any) => ipcRenderer.invoke('db:save-transcription', data),
+  dbGetTranscription: (id: number) => ipcRenderer.invoke('db:get-transcription', id),
+  dbGetTranscriptions: (filters?: any) => ipcRenderer.invoke('db:get-transcriptions', filters),
+  dbSearch: (query: string, filters?: any) => ipcRenderer.invoke('db:search', query, filters),
+  dbUpdateTranscription: (id: number, updates: any) => ipcRenderer.invoke('db:update-transcription', id, updates),
+  dbDeleteTranscription: (id: number) => ipcRenderer.invoke('db:delete-transcription', id),
+  dbToggleFavorite: (id: number) => ipcRenderer.invoke('db:toggle-favorite', id),
+  dbExport: (ids: number[], format: 'json' | 'markdown' | 'txt') => ipcRenderer.invoke('db:export', ids, format),
+  dbGetStats: () => ipcRenderer.invoke('db:get-stats'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

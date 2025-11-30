@@ -13,14 +13,21 @@
     "build:renderer": "vite build",
     "preview": "vite preview",
     "start": "electron .",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "better-sqlite3": "^12.5.0",
     "dotenv": "^16.3.1",
     "openai": "^4.28.0",
     "uiohook-napi": "^1.5.4"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.10.6",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
@@ -28,8 +35,10 @@
     "concurrently": "^8.2.2",
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4",
+    "jest": "^30.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "ts-jest": "^29.4.5",
     "typescript": "^5.3.3",
     "vite": "^5.0.8",
     "wait-on": "^7.1.0"

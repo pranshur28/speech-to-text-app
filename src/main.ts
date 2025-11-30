@@ -4,9 +4,15 @@ import path from 'path';
 import { TranscriptionService } from './services/transcription';
 import { TextFormatter } from './services/formatter';
 import { PasteService } from './services/paste';
+import { ConfigService } from './services/config';
+import { DatabaseService, TranscriptionInsert } from './services/database';
+import { SearchService } from './services/search';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// Initialize config service early
+let configService: ConfigService;
 
 // Track app quitting state
 let isAppQuitting = false;
@@ -17,6 +23,8 @@ let tray: Tray | null = null;
 let transcriptionService: TranscriptionService | null = null;
 let textFormatter: TextFormatter | null = null;
 let pasteService: PasteService | null = null;
+let databaseService: DatabaseService | null = null;
+let searchService: SearchService | null = null;
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -26,6 +34,7 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false, // Prevent throttling when window is hidden - critical for background operation
     },
     icon: path.join(__dirname, '../assets/icon.png'),
     alwaysOnTop: false,
@@ -184,24 +193,31 @@ const createMenu = () => {
 };
 
 app.on('ready', () => {
-  const apiKey = process.env.OPENAI_API_KEY || '';
+  // Initialize config service
+  configService = new ConfigService();
 
-  // Validate API key on startup
+  // Load shortcuts from config (or use platform-specific defaults)
+  toggleShortcut = configService.getToggleShortcut();
+  holdShortcut = configService.getHoldShortcut();
+
+  const apiKey = configService.getApiKey() || '';
+
+  // Don't show error dialog on startup - let user configure in settings
+  // Just log a warning if no API key is found
   if (!apiKey) {
-    dialog.showErrorBox(
-      'API Key Missing',
-      'OpenAI API key not found. Please add your API key to the .env file:\n\nOPENAI_API_KEY=sk-your-key-here\n\nGet your API key from https://platform.openai.com/api-keys'
-    );
+    console.warn('No API key configured. Please add your API key in Settings.');
   } else if (!apiKey.startsWith('sk-')) {
-    dialog.showErrorBox(
-      'Invalid API Key',
-      'The OpenAI API key appears to be invalid. API keys should start with "sk-".\n\nPlease check your .env file and update the OPENAI_API_KEY value.'
-    );
+    console.warn('Invalid API key format. API keys should start with "sk-".');
   }
 
+  // Initialize services
   transcriptionService = new TranscriptionService(apiKey);
   textFormatter = new TextFormatter(apiKey);
   pasteService = new PasteService();
+
+  // Initialize database and search services
+  databaseService = new DatabaseService();
+  searchService = new SearchService(databaseService);
 
   createWindow();
   createOverlayWindow();
@@ -214,7 +230,10 @@ app.on('ready', () => {
 
 // IPC handler to check API key status
 ipcMain.handle('get-api-key-status', () => {
-  const apiKey = process.env.OPENAI_API_KEY || '';
+  if (!configService) {
+    return { valid: false, error: 'Config service not initialized' };
+  }
+  const apiKey = configService.getApiKey() || '';
   if (!apiKey) {
     return { valid: false, error: 'API key not configured' };
   }
@@ -224,9 +243,36 @@ ipcMain.handle('get-api-key-status', () => {
   return { valid: true, error: null };
 });
 
-// Dual shortcut state
-let toggleShortcut = process.platform === 'darwin' ? 'Command+Shift+Space' : 'Ctrl+Shift+Space';
-let holdShortcut = ''; // Default empty for now
+// IPC handler to get API key
+ipcMain.handle('get-api-key', () => {
+  if (!configService) return '';
+  return configService.getApiKey() || '';
+});
+
+// IPC handler to save API key
+ipcMain.handle('save-api-key', (_event: IpcMainInvokeEvent, apiKey: string) => {
+  if (!configService) {
+    return { success: false, error: 'Config service not initialized' };
+  }
+
+  // Validate API key format
+  if (!apiKey || !apiKey.startsWith('sk-')) {
+    return { success: false, error: 'Invalid API key format. Key should start with "sk-"' };
+  }
+
+  // Save the API key
+  configService.setApiKey(apiKey);
+
+  // Reinitialize services with new API key
+  transcriptionService = new TranscriptionService(apiKey);
+  textFormatter = new TextFormatter(apiKey);
+
+  return { success: true, error: null };
+});
+
+// Dual shortcut state (loaded from config on startup)
+let toggleShortcut = '';
+let holdShortcut = '';
 let isTogglePressed = false;
 let isHoldPressed = false;
 
@@ -351,12 +397,18 @@ function parseShortcutToKeyCodes(shortcut: string): {
           }
         }
         // Single letter keys (A-Z)
-        else if (part.length === 1) {
+        else if (/^[A-Z]$/i.test(part)) {
           const char = part.toUpperCase();
           const keyCode = (UiohookKey as any)[char];
           if (keyCode !== undefined) {
             key = keyCode;
+          } else {
+            console.warn(`[DEBUG] Could not find keycode for letter: ${char}`);
           }
+        }
+        // Any other single character
+        else if (part.length === 1) {
+          console.warn(`[DEBUG] Unrecognized single character key: "${part}"`);
         }
         break;
     }
@@ -472,6 +524,7 @@ ipcMain.on('set-overlay-visible', (_event: IpcMainEvent, visible: boolean) => {
 
 // Forward audio data from main app to overlay
 ipcMain.on('audio-data', (_event: IpcMainEvent, data: any) => {
+  console.log('[MAIN] Forwarding audio data to overlay, overlay exists:', !!overlayWindow, 'destroyed:', overlayWindow?.isDestroyed());
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send('audio-data', data);
   }
@@ -490,6 +543,11 @@ ipcMain.handle('update-global-shortcut', (_event: IpcMainInvokeEvent, shortcut: 
 });
 
 app.on('will-quit', () => {
+  // Close database (automatically backs up)
+  if (databaseService) {
+    databaseService.close();
+  }
+
   // Stop uiohook
   try {
     uIOhook.stop();
@@ -577,6 +635,7 @@ ipcMain.handle('get-global-shortcut', () => {
 ipcMain.handle('set-toggle-shortcut', (_event: IpcMainInvokeEvent, shortcut: string) => {
   console.log(`[DEBUG] Setting toggle shortcut to: ${shortcut}`);
   toggleShortcut = shortcut;
+  configService.setToggleShortcut(shortcut);
   refreshShortcuts();
   return { success: true };
 });
@@ -584,6 +643,108 @@ ipcMain.handle('set-toggle-shortcut', (_event: IpcMainInvokeEvent, shortcut: str
 ipcMain.handle('set-hold-shortcut', (_event: IpcMainInvokeEvent, shortcut: string) => {
   console.log(`[DEBUG] Setting hold shortcut to: ${shortcut}`);
   holdShortcut = shortcut;
+  configService.setHoldShortcut(shortcut);
   refreshShortcuts();
   return { success: true };
+});
+
+// Database IPC Handlers
+
+ipcMain.handle('db:save-transcription', (_event: IpcMainInvokeEvent, data: TranscriptionInsert) => {
+  if (!databaseService) throw new Error('Database service not initialized');
+  try {
+    const id = databaseService.saveTranscription(data);
+    return { success: true, id };
+  } catch (error) {
+    console.error('Error saving transcription:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:get-transcription', (_event: IpcMainInvokeEvent, id: number) => {
+  if (!databaseService) throw new Error('Database service not initialized');
+  try {
+    const transcription = databaseService.getTranscription(id);
+    return { success: true, transcription };
+  } catch (error) {
+    console.error('Error getting transcription:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:get-transcriptions', (_event: IpcMainInvokeEvent, filters?: any) => {
+  if (!databaseService) throw new Error('Database service not initialized');
+  try {
+    const transcriptions = databaseService.getTranscriptions(filters || {});
+    return { success: true, transcriptions };
+  } catch (error) {
+    console.error('Error getting transcriptions:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:search', (_event: IpcMainInvokeEvent, query: string, filters?: any) => {
+  if (!searchService) throw new Error('Search service not initialized');
+  try {
+    const result = searchService.search({ query, filters });
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('Error searching transcriptions:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:update-transcription', (_event: IpcMainInvokeEvent, id: number, updates: any) => {
+  if (!databaseService) throw new Error('Database service not initialized');
+  try {
+    databaseService.updateTranscription(id, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating transcription:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:delete-transcription', (_event: IpcMainInvokeEvent, id: number) => {
+  if (!databaseService) throw new Error('Database service not initialized');
+  try {
+    databaseService.deleteTranscription(id);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting transcription:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:toggle-favorite', (_event: IpcMainInvokeEvent, id: number) => {
+  if (!databaseService) throw new Error('Database service not initialized');
+  try {
+    databaseService.toggleFavorite(id);
+    return { success: true };
+  } catch (error) {
+    console.error('Error toggling favorite:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:export', (_event: IpcMainInvokeEvent, ids: number[], format: 'json' | 'markdown' | 'txt') => {
+  if (!databaseService) throw new Error('Database service not initialized');
+  try {
+    const data = databaseService.exportTranscriptions(ids, format);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error exporting transcriptions:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('db:get-stats', () => {
+  if (!databaseService) throw new Error('Database service not initialized');
+  try {
+    const stats = databaseService.getStats();
+    return { success: true, stats };
+  } catch (error) {
+    console.error('Error getting stats:', error);
+    throw error;
+  }
 });
