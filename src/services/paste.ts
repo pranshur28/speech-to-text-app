@@ -1,4 +1,5 @@
 const { execSync } = require('child_process');
+import log from '../utils/logger';
 
 export class PasteService {
   async paste(text: string): Promise<void> {
@@ -39,11 +40,11 @@ export class PasteService {
         try {
           execSync('xdotool key ctrl+v');
         } catch {
-          console.warn('xdotool not available on Linux. Text copied to clipboard but not pasted.');
+          log.warn('xdotool not available on Linux. Text copied to clipboard but not pasted.');
         }
       }
     } catch (error) {
-      console.error('Paste error:', error);
+      log.error('Paste error:', error);
       throw error;
     }
   }

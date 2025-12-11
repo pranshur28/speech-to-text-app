@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { app } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import log from '../utils/logger';
 
 export interface Transcription {
   id: number;
@@ -55,14 +56,14 @@ export class DatabaseService {
     // Run migrations
     this.migrate();
 
-    console.log(`[DatabaseService] Initialized at ${this.dbPath}`);
+    log.info(`[DatabaseService] Initialized at ${this.dbPath}`);
   }
 
   private migrate(): void {
     const version = this.getSchemaVersion();
 
     if (version === 0) {
-      console.log('[DatabaseService] Running initial migration...');
+      log.info('[DatabaseService] Running initial migration...');
 
       // Main transcriptions table
       this.db.exec(`
@@ -150,7 +151,7 @@ export class DatabaseService {
         INSERT INTO schema_version (version) VALUES (1);
       `);
 
-      console.log('[DatabaseService] Migration complete. Schema version: 1');
+      log.info('[DatabaseService] Migration complete. Schema version: 1');
     }
   }
 
@@ -182,7 +183,7 @@ export class DatabaseService {
       now
     );
 
-    console.log(`[DatabaseService] Saved transcription #${result.lastInsertRowid}`);
+    log.info(`[DatabaseService] Saved transcription #${result.lastInsertRowid}`);
     return result.lastInsertRowid as number;
   }
 
@@ -328,17 +329,17 @@ export class DatabaseService {
     const query = `UPDATE transcriptions SET ${fields.join(', ')} WHERE id = ?`;
 
     this.db.prepare(query).run(...params);
-    console.log(`[DatabaseService] Updated transcription #${id}`);
+    log.info(`[DatabaseService] Updated transcription #${id}`);
   }
 
   deleteTranscription(id: number): void {
     this.db.prepare('DELETE FROM transcriptions WHERE id = ?').run(id);
-    console.log(`[DatabaseService] Deleted transcription #${id}`);
+    log.info(`[DatabaseService] Deleted transcription #${id}`);
   }
 
   toggleFavorite(id: number): void {
     this.db.prepare('UPDATE transcriptions SET is_favorite = NOT is_favorite WHERE id = ?').run(id);
-    console.log(`[DatabaseService] Toggled favorite for transcription #${id}`);
+    log.info(`[DatabaseService] Toggled favorite for transcription #${id}`);
   }
 
   // Export functionality
@@ -378,9 +379,9 @@ export class DatabaseService {
     try {
       // Copy database file
       fs.copyFileSync(this.dbPath, backupPath);
-      console.log(`[DatabaseService] Backup created at ${backupPath}`);
+      log.info(`[DatabaseService] Backup created at ${backupPath}`);
     } catch (error) {
-      console.error('[DatabaseService] Backup failed:', error);
+      log.error('[DatabaseService] Backup failed:', error);
     }
   }
 
@@ -388,7 +389,7 @@ export class DatabaseService {
     const backupPath = `${this.dbPath}.bak`;
 
     if (!fs.existsSync(backupPath)) {
-      console.error('[DatabaseService] No backup found');
+      log.error('[DatabaseService] No backup found');
       return false;
     }
 
@@ -397,10 +398,10 @@ export class DatabaseService {
       fs.copyFileSync(backupPath, this.dbPath);
       this.db = new Database(this.dbPath);
       this.db.pragma('foreign_keys = ON');
-      console.log('[DatabaseService] Restored from backup');
+      log.info('[DatabaseService] Restored from backup');
       return true;
     } catch (error) {
-      console.error('[DatabaseService] Restore failed:', error);
+      log.error('[DatabaseService] Restore failed:', error);
       return false;
     }
   }
@@ -422,14 +423,14 @@ export class DatabaseService {
   // Cleanup
 
   vacuum(): void {
-    console.log('[DatabaseService] Running VACUUM...');
+    log.info('[DatabaseService] Running VACUUM...');
     this.db.exec('VACUUM');
-    console.log('[DatabaseService] VACUUM complete');
+    log.info('[DatabaseService] VACUUM complete');
   }
 
   close(): void {
     this.backup();
     this.db.close();
-    console.log('[DatabaseService] Database closed');
+    log.info('[DatabaseService] Database closed');
   }
 }

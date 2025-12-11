@@ -1,5 +1,6 @@
 const OpenAI = require('openai').default;
 const { toFile } = require('openai');
+import log from '../utils/logger';
 
 export class TranscriptionService {
   private openai: any;
@@ -20,7 +21,7 @@ export class TranscriptionService {
 
       return transcription.text;
     } catch (error) {
-      console.error('Transcription error:', error);
+      log.error('Transcription error:', error);
       throw error;
     }
   }

@@ -2,16 +2,33 @@ appId: com.speechtotext.app
 productName: Speech to Text
 directories:
   buildResources: assets
+  output: dist
+
+# Only include what's needed - electron-builder auto-prunes devDependencies
 files:
   - dist/**/*
   - build/**/*
-  - node_modules/**/*
   - package.json
+  # Exclude unnecessary files from node_modules
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/*.d.ts"
+  - "!**/node_modules/.bin"
+  - "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}"
+  - "!.editorconfig"
+  - "!**/._*"
+  - "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}"
+  - "!**/{tsconfig.json,tsconfig.*.json}"
+
+# Enable asar for faster loading and smaller size
+asar: true
 
 win:
   target:
     - nsis
     - portable
+  icon: assets/icon.ico
+
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -23,9 +40,14 @@ mac:
   category: public.app-category.productivity
   entitlements: ./entitlements.mac.plist
   entitlementsInherit: ./entitlements.mac.plist
+  icon: assets/icon.icns
 
 linux:
   target:
     - AppImage
     - deb
   category: Office
+  icon: assets/icon.png
+
+# Compression for smaller downloads
+compression: normal

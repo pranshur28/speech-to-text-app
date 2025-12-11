@@ -7,6 +7,6 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/main.ts", "src/preload.ts", "src/services/**/*"],
+  "include": ["src/main.ts", "src/preload.ts", "src/services/**/*", "src/utils/**/*"],
   "exclude": ["src/renderer/**/*"]
 }

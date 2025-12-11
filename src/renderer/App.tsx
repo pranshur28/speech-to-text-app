@@ -1,5 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './styles.css';
+import { SearchView } from './SearchView';
+import TabBar, { TabType } from './components/TabBar';
+import PersistentHeader, { RecordingStatus } from './components/PersistentHeader';
+import ContextualFooter from './components/ContextualFooter';
+import * as Switch from '@radix-ui/react-switch';
 
 interface Transcription {
   id: number;
@@ -12,6 +17,8 @@ interface Transcription {
 }
 
 export default function App() {
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('recording');
   // Helper to map DOM keys to Electron Accelerators
   const getElectronAccelerator = (e: KeyboardEvent): string | null => {
     const key = e.key.toUpperCase();
@@ -57,10 +64,10 @@ export default function App() {
   };
 
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [status, setStatus] = useState('Ready');
   const [isProcessing, setIsProcessing] = useState(false);
   const [recentTranscriptions, setRecentTranscriptions] = useState<Transcription[]>([]);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // API Key State
@@ -92,6 +99,7 @@ export default function App() {
   const streamRef = useRef<MediaStream | null>(null);
   const isRecordingRef = useRef(false);
   const isProcessingRef = useRef(false);
+  const isPausedRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioDataIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -106,12 +114,16 @@ export default function App() {
   }, [isProcessing]);
 
   useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+  useEffect(() => {
     // Check API key status on startup
     window.electronAPI.getApiKeyStatus().then((status) => {
       if (!status.valid) {
         setErrorMessage(status.error || 'API key error');
         // Auto-open settings if no API key
-        setIsSettingsOpen(true);
+        setActiveTab('settings');
       }
     });
 
@@ -156,6 +168,16 @@ export default function App() {
       stopRecording();
     });
 
+    const unsubPause = window.electronAPI.onPauseRecording(() => {
+      if (!isRecordingRef.current || isPausedRef.current) return;
+      pauseRecording();
+    });
+
+    const unsubResume = window.electronAPI.onResumeRecording(() => {
+      if (!isRecordingRef.current || !isPausedRef.current) return;
+      resumeRecording();
+    });
+
     // Ensure overlay is hidden on start
     window.electronAPI.setOverlayVisible(false);
 
@@ -164,6 +186,8 @@ export default function App() {
       unsubToggle();
       unsubStart();
       unsubStop();
+      unsubPause();
+      unsubResume();
     };
   }, []);
 
@@ -338,6 +362,7 @@ export default function App() {
       }
 
       setIsRecording(false);
+      setIsPaused(false);
       setIsProcessing(true);
       setStatus('Thinking...');
       window.electronAPI.setOverlayVisible(false);
@@ -399,6 +424,22 @@ export default function App() {
     mediaRecorder.stop();
   };
 
+  const pauseRecording = () => {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') return;
+
+    mediaRecorderRef.current.pause();
+    setIsPaused(true);
+    setStatus('Paused');
+  };
+
+  const resumeRecording = () => {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'paused') return;
+
+    mediaRecorderRef.current.resume();
+    setIsPaused(false);
+    setStatus('Listening...');
+  };
+
   const cancelRecording = () => {
     if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
 
@@ -421,6 +462,7 @@ export default function App() {
     audioChunksRef.current = [];
 
     setIsRecording(false);
+    setIsPaused(false);
     setStatus('Cancelled');
     window.electronAPI.setOverlayVisible(false);
 
@@ -479,242 +521,254 @@ export default function App() {
     }
   };
 
+  // Determine recording status for header
+  const getRecordingStatus = (): RecordingStatus => {
+    if (isRecording) return 'recording';
+    if (isProcessing) return 'processing';
+    return 'ready';
+  };
+
+  const getStatusText = (): string => {
+    if (isRecording) return status;
+    if (isProcessing) return status;
+    return 'Ready';
+  };
+
   return (
-    <div className="app-container">
-      <header>
-        <div className="header-content">
-          <h1>Speech to Text</h1>
-          <div className="subtitle">AI Assistant</div>
-        </div>
-        <button className="settings-btn" onClick={() => setIsSettingsOpen(true)}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </button>
-      </header>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-primary)' }}>
+      {/* Persistent Header */}
+      <PersistentHeader
+        status={getRecordingStatus()}
+        statusText={getStatusText()}
+        onCommandPaletteClick={() => {
+          // TODO: Implement command palette in Phase 3
+          console.log('Command palette not yet implemented');
+        }}
+        onSettingsClick={() => setActiveTab('settings')}
+      />
 
-      <main>
-        <div className="recording-section">
-          <div className="record-button-container">
-            <div className={`ripple ${isRecording ? 'active' : ''}`}></div>
-            <div
-              className={`record-button ${isRecording ? 'recording' : ''}`}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              onClick={handleClick}
-              title={pushToTalk ? "Hold to Record" : "Click to Toggle"}
-            >
-              <div className="mic-icon"></div>
-            </div>
-          </div>
-          <div className={`status-badge ${isRecording || isProcessing ? 'active' : ''}`}>
-            {status}
-          </div>
-          {isRecording && !pushToTalk && (
-            <button className="cancel-btn" onClick={cancelRecording}>
-              Cancel
-            </button>
-          )}
-          {errorMessage && (
-            <div className="error-message">
-              {errorMessage}
-              <button className="error-dismiss" onClick={() => setErrorMessage(null)}>×</button>
-            </div>
-          )}
-        </div>
+      {/* Tab Bar */}
+      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
-        <div className="recent-section">
-          <div className="section-header">
-            <span className="section-title">Recent History</span>
-          </div>
-          <div className="recent-list">
-            {recentTranscriptions.length === 0 ? (
-              <div className="empty-state">
-                {pushToTalk ? "Hold button to speak" : "Click button to start"}
-              </div>
-            ) : (
-              recentTranscriptions.map(item => (
-                <div key={item.id} className="recent-item">
-                  <div className="recent-meta">
-                    <span>{new Date(item.timestamp).toLocaleTimeString()}</span>
-                  </div>
-                  {item.formatted_text}
+      {/* Tab Content Container */}
+      <div className="tab-content-container">
+        {/* Recording Tab */}
+        <div className={`tab-content ${activeTab === 'recording' ? 'active' : ''}`}>
+          <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '40px', padding: '24px' }}>
+            <div className="recording-section">
+              <div className="record-button-container">
+                <div className={`ripple ${isRecording ? 'active' : ''}`}></div>
+                <div
+                  className={`record-button ${isRecording ? 'recording' : ''}`}
+                  onMouseDown={handleMouseDown}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onClick={handleClick}
+                  title={pushToTalk ? "Hold to Record" : "Click to Toggle"}
+                >
+                  <div className="mic-icon"></div>
                 </div>
-              ))
-            )}
-          </div>
+              </div>
+              <div className={`status-badge ${isRecording || isProcessing ? 'active' : ''}`}>
+                {status}
+              </div>
+              {isRecording && !pushToTalk && (
+                <button className="cancel-btn" onClick={cancelRecording}>
+                  Cancel
+                </button>
+              )}
+              {errorMessage && (
+                <div className="error-message">
+                  {errorMessage}
+                  <button className="error-dismiss" onClick={() => setErrorMessage(null)}>×</button>
+                </div>
+              )}
+            </div>
+
+            <div className="recent-section">
+              <div className="section-header">
+                <span className="section-title">Recent History</span>
+              </div>
+              <div className="recent-list">
+                {recentTranscriptions.length === 0 ? (
+                  <div className="empty-state">
+                    {pushToTalk ? "Hold button to speak" : "Click button to start"}
+                  </div>
+                ) : (
+                  recentTranscriptions.map(item => (
+                    <div key={item.id} className="recent-item">
+                      <div className="recent-meta">
+                        <span>{new Date(item.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                      {item.formatted_text}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </main>
         </div>
-      </main>
 
-      {/* Settings Modal */}
-      <div className={`modal-overlay ${isSettingsOpen ? 'open' : ''}`} onClick={(e) => {
-        if (e.target === e.currentTarget) setIsSettingsOpen(false);
-      }}>
-        <div className="modal">
-          <div className="modal-header">
-            <div className="modal-title">Settings</div>
-            <button className="close-btn" onClick={() => setIsSettingsOpen(false)}>×</button>
-          </div>
+        {/* History Tab */}
+        <div className={`tab-content ${activeTab === 'history' ? 'active' : ''}`}>
+          <SearchView onClose={() => setActiveTab('recording')} />
+        </div>
 
-          <div className="setting-group">
-            <label className="setting-label">OpenAI API Key</label>
-            <div className="setting-description">
-              Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: '#646cff' }}>platform.openai.com/api-keys</a>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-              <input
-                type="password"
-                className="api-key-input"
-                placeholder="sk-..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: '10px 12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '6px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  fontFamily: 'monospace'
-                }}
-              />
-              <button
-                onClick={handleSaveApiKey}
-                disabled={apiKeySaveStatus === 'saving'}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: apiKeySaveStatus === 'success' ? '#10b981' : '#646cff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: apiKeySaveStatus === 'saving' ? 'not-allowed' : 'pointer',
-                  opacity: apiKeySaveStatus === 'saving' ? 0.6 : 1,
-                  transition: 'all 0.2s'
-                }}
-              >
-                {apiKeySaveStatus === 'saving' ? 'Saving...' : apiKeySaveStatus === 'success' ? 'Saved!' : 'Save'}
-              </button>
-            </div>
-            {apiKeySaveMessage && (
-              <div style={{
-                marginTop: '8px',
-                padding: '8px 12px',
-                backgroundColor: apiKeySaveStatus === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                border: `1px solid ${apiKeySaveStatus === 'error' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
-                borderRadius: '6px',
-                fontSize: '12px',
-                color: apiKeySaveStatus === 'error' ? '#ef4444' : '#10b981'
-              }}>
-                {apiKeySaveMessage}
+        {/* Settings Tab */}
+        <div className={`tab-content ${activeTab === 'settings' ? 'active' : ''}`}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+            <h2 style={{ marginTop: 0, marginBottom: '24px', fontSize: '24px', fontWeight: 600 }}>Settings</h2>
+
+            <div className="setting-group">
+              <label className="setting-label">OpenAI API Key</label>
+              <div className="setting-description">
+                Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)' }}>platform.openai.com/api-keys</a>
               </div>
-            )}
-          </div>
-
-          <div className="setting-group">
-            <label className="setting-label">Toggle Recording Shortcut</label>
-            <div className="shortcut-recorder">
-              <div
-                className={`shortcut-display ${recordingTarget === 'toggle' ? 'recording' : ''}`}
-                onClick={() => {
-                  setRecordingTarget('toggle');
-                  setPressedKeys([]);
-                  setShortcutError(null);
-                }}
-              >
-                {recordingTarget === 'toggle'
-                  ? (pressedKeys.length > 0 ? pressedKeys.join('+') : 'Press keys...')
-                  : (toggleShortcut || 'None')}
-              </div>
-              {recordingTarget === 'toggle' ? (
-                <button className="cancel-record-btn" onClick={(e) => {
-                  e.stopPropagation();
-                  setRecordingTarget(null);
-                  setPressedKeys([]);
-                }}>Cancel</button>
-              ) : (
-                <button className="reset-btn" onClick={() => {
-                  setToggleShortcut('');
-                  window.electronAPI.setToggleShortcut('');
-                }} title="Clear Shortcut">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <input
+                  type="password"
+                  className="setting-input"
+                  placeholder="sk-..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  style={{ fontFamily: 'monospace' }}
+                />
+                <button
+                  onClick={handleSaveApiKey}
+                  disabled={apiKeySaveStatus === 'saving'}
+                  className="btn-primary"
+                  style={{
+                    width: 'auto',
+                    minWidth: '100px',
+                    backgroundColor: apiKeySaveStatus === 'success' ? 'var(--accent-success)' : 'var(--accent-primary)',
+                    opacity: apiKeySaveStatus === 'saving' ? 0.6 : 1,
+                    cursor: apiKeySaveStatus === 'saving' ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {apiKeySaveStatus === 'saving' ? 'Saving...' : apiKeySaveStatus === 'success' ? 'Saved!' : 'Save'}
                 </button>
+              </div>
+              {apiKeySaveMessage && (
+                <div className="error-message" style={{
+                  backgroundColor: apiKeySaveStatus === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                  border: `1px solid ${apiKeySaveStatus === 'error' ? 'var(--accent-danger)' : 'var(--accent-success)'}`,
+                  color: apiKeySaveStatus === 'error' ? 'var(--accent-danger)' : 'var(--accent-success)'
+                }}>
+                  {apiKeySaveMessage}
+                </div>
               )}
             </div>
-          </div>
 
-          <div className="setting-group">
-            <label className="setting-label">Hold to Talk Shortcut</label>
-            <div className="setting-description" style={{ marginBottom: '8px' }}>
-              Press and hold key to record, release to stop and paste. You can use any key - try F13-F24, CapsLock, or less common letters. Single keys like K will work but may interfere with typing.
-            </div>
-            <div className="shortcut-recorder">
-              <div
-                className={`shortcut-display ${recordingTarget === 'hold' ? 'recording' : ''}`}
-                onClick={() => {
-                  setRecordingTarget('hold');
-                  setPressedKeys([]);
-                  setShortcutError(null);
-                  setShortcutWarning(null);
-                }}
-              >
-                {recordingTarget === 'hold'
-                  ? (pressedKeys.length > 0 ? pressedKeys.join('+') : 'Press any key...')
-                  : (holdShortcut || 'Click to set')}
+            <div className="setting-group">
+              <label className="setting-label">Toggle Recording Shortcut</label>
+              <div className="shortcut-recorder">
+                <div
+                  className={`shortcut-display ${recordingTarget === 'toggle' ? 'recording' : ''}`}
+                  onClick={() => {
+                    setRecordingTarget('toggle');
+                    setPressedKeys([]);
+                    setShortcutError(null);
+                  }}
+                >
+                  {recordingTarget === 'toggle'
+                    ? (pressedKeys.length > 0 ? pressedKeys.join('+') : 'Press keys...')
+                    : (toggleShortcut || 'None')}
+                </div>
+                {recordingTarget === 'toggle' ? (
+                  <button className="cancel-record-btn" onClick={(e) => {
+                    e.stopPropagation();
+                    setRecordingTarget(null);
+                    setPressedKeys([]);
+                  }}>Cancel</button>
+                ) : (
+                  <button className="reset-btn" onClick={() => {
+                    setToggleShortcut('');
+                    window.electronAPI.setToggleShortcut('');
+                  }} title="Clear Shortcut">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                )}
               </div>
-              {recordingTarget === 'hold' ? (
-                <button className="cancel-record-btn" onClick={(e) => {
-                  e.stopPropagation();
-                  setRecordingTarget(null);
-                  setPressedKeys([]);
-                  setShortcutWarning(null);
-                }}>Cancel</button>
-              ) : (
-                <button className="reset-btn" onClick={() => {
-                  setHoldShortcut('');
-                  window.electronAPI.setHoldShortcut('');
-                  setShortcutWarning(null);
-                }} title="Clear Shortcut">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
+            </div>
+
+            <div className="setting-group">
+              <label className="setting-label">Hold to Talk Shortcut</label>
+              <div className="setting-description" style={{ marginBottom: '8px' }}>
+                Press and hold key to record, release to stop and paste. You can use any key - try F13-F24, CapsLock, or less common letters. Single keys like K will work but may interfere with typing.
+              </div>
+              <div className="shortcut-recorder">
+                <div
+                  className={`shortcut-display ${recordingTarget === 'hold' ? 'recording' : ''}`}
+                  onClick={() => {
+                    setRecordingTarget('hold');
+                    setPressedKeys([]);
+                    setShortcutError(null);
+                    setShortcutWarning(null);
+                  }}
+                >
+                  {recordingTarget === 'hold'
+                    ? (pressedKeys.length > 0 ? pressedKeys.join('+') : 'Press any key...')
+                    : (holdShortcut || 'Click to set')}
+                </div>
+                {recordingTarget === 'hold' ? (
+                  <button className="cancel-record-btn" onClick={(e) => {
+                    e.stopPropagation();
+                    setRecordingTarget(null);
+                    setPressedKeys([]);
+                    setShortcutWarning(null);
+                  }}>Cancel</button>
+                ) : (
+                  <button className="reset-btn" onClick={() => {
+                    setHoldShortcut('');
+                    window.electronAPI.setHoldShortcut('');
+                    setShortcutWarning(null);
+                  }} title="Clear Shortcut">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {shortcutWarning && (
+                <div className="error-message" style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid var(--accent-warning)',
+                  color: 'var(--accent-warning)'
+                }}>
+                  ⚠️ {shortcutWarning}
+                </div>
               )}
             </div>
-            {shortcutWarning && (
-              <div className="shortcut-warning" style={{
-                marginTop: '8px',
-                padding: '8px 12px',
-                backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                border: '1px solid rgba(255, 193, 7, 0.3)',
-                borderRadius: '6px',
-                fontSize: '12px',
-                color: '#ffc107'
-              }}>
-                ⚠️ {shortcutWarning}
-              </div>
-            )}
-          </div>
 
-          <div className="setting-group">
-            <div className={`toggle-switch ${pushToTalk ? 'active' : ''}`} onClick={() => setPushToTalk(!pushToTalk)}>
-              <span className="setting-label" style={{ marginBottom: 0 }}>Push to Talk (Button Only)</span>
-              <div className="toggle-track">
-                <div className="toggle-thumb"></div>
+            <div className="setting-group">
+              <div className="switch-row">
+                <label className="switch-label" htmlFor="push-to-talk">
+                  Push to Talk (Button Only)
+                </label>
+                <Switch.Root
+                  className="switch-root"
+                  id="push-to-talk"
+                  checked={pushToTalk}
+                  onCheckedChange={setPushToTalk}
+                >
+                  <Switch.Thumb className="switch-thumb" />
+                </Switch.Root>
               </div>
+              <div className="setting-description">Hold the in-app button to record</div>
             </div>
-            <div className="setting-description">Hold the in-app button to record</div>
           </div>
         </div>
       </div>
+
+      {/* Contextual Footer */}
+      <ContextualFooter
+        activeTab={activeTab}
+        recordingMode={isRecording ? 'recording' : (isProcessing ? 'processing' : 'ready')}
+      />
     </div>
   );
 }

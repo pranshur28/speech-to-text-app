@@ -7,6 +7,7 @@ import { PasteService } from './services/paste';
 import { ConfigService } from './services/config';
 import { DatabaseService, TranscriptionInsert } from './services/database';
 import { SearchService } from './services/search';
+import log from './utils/logger';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -78,8 +79,8 @@ const createWindow = () => {
 
 const createOverlayWindow = () => {
   overlayWindow = new BrowserWindow({
-    width: 200,
-    height: 60,
+    width: 180,
+    height: 50,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -92,8 +93,7 @@ const createOverlayWindow = () => {
     skipTaskbar: true,
     hasShadow: false,
     show: false,
-    focusable: false, // Click-through-ish behavior (doesn't steal focus)
-    x: 0, // Will position later or let OS decide, but usually top-center is good
+    x: 0,
     y: 0
   });
 
@@ -101,7 +101,7 @@ const createOverlayWindow = () => {
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
-  overlayWindow.setPosition(Math.round(width / 2 - 100), height - 100);
+  overlayWindow.setPosition(Math.round(width / 2 - 90), height - 80);
 
   const isDev = !app.isPackaged;
   const startUrl = isDev
@@ -110,8 +110,9 @@ const createOverlayWindow = () => {
 
   overlayWindow.loadURL(startUrl);
 
-  // Make it ignore mouse events so it's click-through
-  overlayWindow.setIgnoreMouseEvents(true);
+  // Allow click-through except on interactive elements (buttons)
+  // The overlay buttons will be clickable, but the rest is transparent
+  overlayWindow.setIgnoreMouseEvents(true, { forward: true });
 
   overlayWindow.on('closed', () => {
     overlayWindow = null;
@@ -150,7 +151,7 @@ const createTray = () => {
       }
     });
   } catch (e) {
-    console.log("Could not create tray icon (assets might be missing):", e);
+    log.info("Could not create tray icon (assets might be missing):", e);
   }
 };
 
@@ -205,9 +206,9 @@ app.on('ready', () => {
   // Don't show error dialog on startup - let user configure in settings
   // Just log a warning if no API key is found
   if (!apiKey) {
-    console.warn('No API key configured. Please add your API key in Settings.');
+    log.warn('No API key configured. Please add your API key in Settings.');
   } else if (!apiKey.startsWith('sk-')) {
-    console.warn('Invalid API key format. API keys should start with "sk-".');
+    log.warn('Invalid API key format. API keys should start with "sk-".');
   }
 
   // Initialize services
@@ -294,7 +295,7 @@ function parseShortcutToKeyCodes(shortcut: string): {
   let requiresShift = false;
   let key: number | null = null;
 
-  console.log(`[DEBUG] Parsing shortcut: "${shortcut}" → parts:`, parts);
+  log.debug(`Parsing shortcut: "${shortcut}" → parts:`, parts);
 
   for (const part of parts) {
     const upperPart = part.toUpperCase();
@@ -342,6 +343,13 @@ function parseShortcutToKeyCodes(shortcut: string): {
         break;
       case 'SCROLLLOCK':
         key = UiohookKey.ScrollLock;
+        break;
+      // Globe/Fn key on newer Macs - keycode may vary (commonly 179, 63, or 0x3F)
+      case 'GLOBE':
+      case 'FN':
+        // Try known Globe key keycodes - 179 is common for IOHIDUsage
+        key = 179;
+        log.info('Globe/Fn key selected - keycode 179. If this doesn\'t work, check logs for actual keycode.');
         break;
       // Note: Pause key not available in uiohook-napi
       case 'INSERT':
@@ -403,18 +411,18 @@ function parseShortcutToKeyCodes(shortcut: string): {
           if (keyCode !== undefined) {
             key = keyCode;
           } else {
-            console.warn(`[DEBUG] Could not find keycode for letter: ${char}`);
+            log.warn(`Could not find keycode for letter: ${char}`);
           }
         }
         // Any other single character
         else if (part.length === 1) {
-          console.warn(`[DEBUG] Unrecognized single character key: "${part}"`);
+          log.warn(`Unrecognized single character key: "${part}"`);
         }
         break;
     }
   }
 
-  console.log(`[DEBUG] Parsed result:`, { requiresMeta, requiresCtrl, requiresAlt, requiresShift, key, keyName: key ? Object.keys(UiohookKey).find(k => (UiohookKey as any)[k] === key) : null });
+  log.debug(`Parsed result:`, { requiresMeta, requiresCtrl, requiresAlt, requiresShift, key, keyName: key ? Object.keys(UiohookKey).find(k => (UiohookKey as any)[k] === key) : null });
   return { requiresMeta, requiresCtrl, requiresAlt, requiresShift, key };
 }
 
@@ -436,7 +444,7 @@ function checkModifiers(shortcutKeys: ReturnType<typeof parseShortcutToKeyCodes>
 }
 
 function refreshShortcuts() {
-  console.log(`[DEBUG] Refreshing shortcuts. Toggle: "${toggleShortcut}", Hold: "${holdShortcut}"`);
+  log.debug(`Refreshing shortcuts. Toggle: "${toggleShortcut}", Hold: "${holdShortcut}"`);
 
   try {
     uIOhook.stop();
@@ -452,6 +460,10 @@ function refreshShortcuts() {
     // Track pressed keys
     pressedKeys.add(e.keycode);
 
+    // Verbose logging: Show ALL key presses to help identify Globe/Fn key
+    const keyName = Object.keys(UiohookKey).find(k => (UiohookKey as any)[k] === e.keycode) || 'UNKNOWN';
+    log.info(`[KEY DEBUG] keydown: keycode=${e.keycode} (0x${e.keycode.toString(16)}) name=${keyName}`);
+
     // Debug: Log key presses with current modifiers
     const currentMods = {
       meta: pressedKeys.has(UiohookKey.Meta) || pressedKeys.has(UiohookKey.MetaRight),
@@ -462,20 +474,20 @@ function refreshShortcuts() {
 
     // Check Toggle Shortcut
     if (toggleKeys && toggleKeys.key !== null && e.keycode === toggleKeys.key) {
-      console.log(`[DEBUG] Toggle key matched! keycode=${e.keycode}, checkModifiers=${checkModifiers(toggleKeys)}, currentMods:`, currentMods, 'required:', { meta: toggleKeys.requiresMeta, ctrl: toggleKeys.requiresCtrl, alt: toggleKeys.requiresAlt, shift: toggleKeys.requiresShift });
+      log.debug(`Toggle key matched! keycode=${e.keycode}, checkModifiers=${checkModifiers(toggleKeys)}, currentMods:`, currentMods, 'required:', { meta: toggleKeys.requiresMeta, ctrl: toggleKeys.requiresCtrl, alt: toggleKeys.requiresAlt, shift: toggleKeys.requiresShift });
       if (!isTogglePressed && checkModifiers(toggleKeys)) {
         isTogglePressed = true;
-        console.log('[DEBUG] Toggle shortcut triggered');
+        log.debug('Toggle shortcut triggered');
         if (mainWindow) mainWindow.webContents.send('toggle-recording');
       }
     }
 
     // Check Hold Shortcut
     if (holdKeys && holdKeys.key !== null && e.keycode === holdKeys.key) {
-      console.log(`[DEBUG] Hold key matched! keycode=${e.keycode}, checkModifiers=${checkModifiers(holdKeys)}, currentMods:`, currentMods, 'required:', { meta: holdKeys.requiresMeta, ctrl: holdKeys.requiresCtrl, alt: holdKeys.requiresAlt, shift: holdKeys.requiresShift });
+      log.debug(`Hold key matched! keycode=${e.keycode}, checkModifiers=${checkModifiers(holdKeys)}, currentMods:`, currentMods, 'required:', { meta: holdKeys.requiresMeta, ctrl: holdKeys.requiresCtrl, alt: holdKeys.requiresAlt, shift: holdKeys.requiresShift });
       if (!isHoldPressed && checkModifiers(holdKeys)) {
         isHoldPressed = true;
-        console.log('[DEBUG] Hold shortcut pressed - starting recording');
+        log.debug('Hold shortcut pressed - starting recording');
         if (mainWindow) mainWindow.webContents.send('start-recording');
       }
     }
@@ -494,7 +506,7 @@ function refreshShortcuts() {
     if (holdKeys && holdKeys.key !== null && e.keycode === holdKeys.key) {
       if (isHoldPressed) {
         isHoldPressed = false;
-        console.log('[DEBUG] Hold shortcut released - stopping recording');
+        log.debug('Hold shortcut released - stopping recording');
         if (mainWindow) mainWindow.webContents.send('stop-recording');
       }
     }
@@ -503,7 +515,7 @@ function refreshShortcuts() {
   try {
     uIOhook.start();
   } catch (error) {
-    console.error('[DEBUG] Failed to start uIOhook', error);
+    log.error('Failed to start uIOhook', error);
   }
 }
 
@@ -524,14 +536,41 @@ ipcMain.on('set-overlay-visible', (_event: IpcMainEvent, visible: boolean) => {
 
 // Forward audio data from main app to overlay
 ipcMain.on('audio-data', (_event: IpcMainEvent, data: any) => {
-  console.log('[MAIN] Forwarding audio data to overlay, overlay exists:', !!overlayWindow, 'destroyed:', overlayWindow?.isDestroyed());
+  log.debug('Forwarding audio data to overlay, overlay exists:', !!overlayWindow, 'destroyed:', overlayWindow?.isDestroyed());
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send('audio-data', data);
   }
 });
 
+// Handle overlay control actions (stop, pause, resume)
+ipcMain.on('overlay-action', (_event: IpcMainEvent, action: 'stop' | 'pause' | 'resume') => {
+  log.debug('Received overlay action:', action);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (action === 'stop') {
+      mainWindow.webContents.send('stop-recording');
+    } else if (action === 'pause') {
+      mainWindow.webContents.send('pause-recording');
+    } else if (action === 'resume') {
+      mainWindow.webContents.send('resume-recording');
+    }
+  }
+});
+
+// Toggle overlay mouse event handling (for making buttons clickable)
+ipcMain.on('set-overlay-interactive', (_event: IpcMainEvent, interactive: boolean) => {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    if (interactive) {
+      // Disable click-through to allow button clicks
+      overlayWindow.setIgnoreMouseEvents(false);
+    } else {
+      // Re-enable click-through with forwarding
+      overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+    }
+  }
+});
+
 ipcMain.handle('update-global-shortcut', (_event: IpcMainInvokeEvent, shortcut: string) => {
-  console.log(`[DEBUG] Received request to update shortcut to: "${shortcut}"`);
+  log.debug(`Received request to update shortcut to: "${shortcut}"`);
   // Legacy handler: assume it updates toggle shortcut
   toggleShortcut = shortcut;
   refreshShortcuts();
@@ -552,7 +591,7 @@ app.on('will-quit', () => {
   try {
     uIOhook.stop();
   } catch (e) {
-    console.log('Error stopping uiohook:', e);
+    log.info('Error stopping uiohook:', e);
   }
 });
 
@@ -580,7 +619,7 @@ ipcMain.handle('transcribe-audio', async (_event: IpcMainInvokeEvent, audioBuffe
     const transcript = await transcriptionService.transcribe(Buffer.from(audioBuffer));
     return { success: true, transcript };
   } catch (error) {
-    console.error('Error transcribing:', error);
+    log.error('Error transcribing:', error);
     throw error;
   }
 });
@@ -591,7 +630,7 @@ ipcMain.handle('format-text', async (_event: IpcMainInvokeEvent, text: string) =
     const formatted = await textFormatter.format(text);
     return { success: true, formatted };
   } catch (error) {
-    console.error('Error formatting:', error);
+    log.error('Error formatting:', error);
     throw error;
   }
 });
@@ -602,7 +641,7 @@ ipcMain.handle('paste-text', async (_event: IpcMainInvokeEvent, text: string) =>
     await pasteService.paste(text);
     return { success: true };
   } catch (error) {
-    console.error('Error pasting:', error);
+    log.error('Error pasting:', error);
     throw error;
   }
 });
@@ -619,7 +658,7 @@ ipcMain.handle('select-audio-file', async () => {
     });
     return { cancelled: result.canceled, filePath: result.filePaths[0] || null };
   } catch (error) {
-    console.error('Error selecting file:', error);
+    log.error('Error selecting file:', error);
     throw error;
   }
 });
@@ -633,7 +672,7 @@ ipcMain.handle('get-global-shortcut', () => {
 });
 
 ipcMain.handle('set-toggle-shortcut', (_event: IpcMainInvokeEvent, shortcut: string) => {
-  console.log(`[DEBUG] Setting toggle shortcut to: ${shortcut}`);
+  log.debug(`Setting toggle shortcut to: ${shortcut}`);
   toggleShortcut = shortcut;
   configService.setToggleShortcut(shortcut);
   refreshShortcuts();
@@ -641,7 +680,7 @@ ipcMain.handle('set-toggle-shortcut', (_event: IpcMainInvokeEvent, shortcut: str
 });
 
 ipcMain.handle('set-hold-shortcut', (_event: IpcMainInvokeEvent, shortcut: string) => {
-  console.log(`[DEBUG] Setting hold shortcut to: ${shortcut}`);
+  log.debug(`Setting hold shortcut to: ${shortcut}`);
   holdShortcut = shortcut;
   configService.setHoldShortcut(shortcut);
   refreshShortcuts();
@@ -656,7 +695,7 @@ ipcMain.handle('db:save-transcription', (_event: IpcMainInvokeEvent, data: Trans
     const id = databaseService.saveTranscription(data);
     return { success: true, id };
   } catch (error) {
-    console.error('Error saving transcription:', error);
+    log.error('Error saving transcription:', error);
     throw error;
   }
 });
@@ -667,7 +706,7 @@ ipcMain.handle('db:get-transcription', (_event: IpcMainInvokeEvent, id: number) 
     const transcription = databaseService.getTranscription(id);
     return { success: true, transcription };
   } catch (error) {
-    console.error('Error getting transcription:', error);
+    log.error('Error getting transcription:', error);
     throw error;
   }
 });
@@ -678,7 +717,7 @@ ipcMain.handle('db:get-transcriptions', (_event: IpcMainInvokeEvent, filters?: a
     const transcriptions = databaseService.getTranscriptions(filters || {});
     return { success: true, transcriptions };
   } catch (error) {
-    console.error('Error getting transcriptions:', error);
+    log.error('Error getting transcriptions:', error);
     throw error;
   }
 });
@@ -689,7 +728,7 @@ ipcMain.handle('db:search', (_event: IpcMainInvokeEvent, query: string, filters?
     const result = searchService.search({ query, filters });
     return { success: true, ...result };
   } catch (error) {
-    console.error('Error searching transcriptions:', error);
+    log.error('Error searching transcriptions:', error);
     throw error;
   }
 });
@@ -700,7 +739,7 @@ ipcMain.handle('db:update-transcription', (_event: IpcMainInvokeEvent, id: numbe
     databaseService.updateTranscription(id, updates);
     return { success: true };
   } catch (error) {
-    console.error('Error updating transcription:', error);
+    log.error('Error updating transcription:', error);
     throw error;
   }
 });
@@ -711,7 +750,7 @@ ipcMain.handle('db:delete-transcription', (_event: IpcMainInvokeEvent, id: numbe
     databaseService.deleteTranscription(id);
     return { success: true };
   } catch (error) {
-    console.error('Error deleting transcription:', error);
+    log.error('Error deleting transcription:', error);
     throw error;
   }
 });
@@ -722,7 +761,7 @@ ipcMain.handle('db:toggle-favorite', (_event: IpcMainInvokeEvent, id: number) =>
     databaseService.toggleFavorite(id);
     return { success: true };
   } catch (error) {
-    console.error('Error toggling favorite:', error);
+    log.error('Error toggling favorite:', error);
     throw error;
   }
 });
@@ -733,7 +772,7 @@ ipcMain.handle('db:export', (_event: IpcMainInvokeEvent, ids: number[], format: 
     const data = databaseService.exportTranscriptions(ids, format);
     return { success: true, data };
   } catch (error) {
-    console.error('Error exporting transcriptions:', error);
+    log.error('Error exporting transcriptions:', error);
     throw error;
   }
 });
@@ -744,7 +783,7 @@ ipcMain.handle('db:get-stats', () => {
     const stats = databaseService.getStats();
     return { success: true, stats };
   } catch (error) {
-    console.error('Error getting stats:', error);
+    log.error('Error getting stats:', error);
     throw error;
   }
 });

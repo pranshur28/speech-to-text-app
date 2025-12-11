@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import log from '../utils/logger';
 
 interface Config {
   openaiApiKey?: string;
@@ -25,7 +26,7 @@ export class ConfigService {
         return JSON.parse(data);
       }
     } catch (error) {
-      console.error('Error loading config:', error);
+      log.error('Error loading config:', error);
     }
     return {};
   }
@@ -38,7 +39,7 @@ export class ConfigService {
       }
       fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8');
     } catch (error) {
-      console.error('Error saving config:', error);
+      log.error('Error saving config:', error);
     }
   }
 
