@@ -1,31 +1,12 @@
 const { execSync } = require('child_process');
+const { clipboard } = require('electron');
 import log from '../utils/logger';
 
 export class PasteService {
   async paste(text: string): Promise<void> {
     try {
-      if (process.platform === 'darwin') {
-        // macOS - use pbcopy
-        const buffer = Buffer.from(text, 'utf8');
-        execSync('pbcopy', { input: buffer });
-      } else if (process.platform === 'win32') {
-        // Windows - use clip via stdin to avoid command injection
-        const buffer = Buffer.from(text, 'utf8');
-        execSync('powershell.exe -Command "$input | Set-Clipboard"', {
-          input: buffer,
-          encoding: 'utf8',
-        });
-      } else {
-        // Linux - use xclip if available, otherwise try xsel
-        try {
-          const buffer = Buffer.from(text, 'utf8');
-          execSync('xclip -selection clipboard', { input: buffer });
-        } catch {
-          // Fallback to xsel
-          const buffer = Buffer.from(text, 'utf8');
-          execSync('xsel --clipboard --input', { input: buffer });
-        }
-      }
+      // Use Electron's clipboard API for proper Unicode support across all platforms
+      clipboard.writeText(text);
 
       // Small delay to ensure clipboard is ready
       await new Promise((resolve) => setTimeout(resolve, 50));
