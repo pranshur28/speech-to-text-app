@@ -7,6 +7,7 @@ import { PasteService } from './services/paste';
 import { ConfigService } from './services/config';
 import { DatabaseService, TranscriptionInsert } from './services/database';
 import { SearchService } from './services/search';
+import { DictionaryService, DictionaryEntryInsert } from './services/dictionary';
 import log from './utils/logger';
 import dotenv from 'dotenv';
 
@@ -26,6 +27,7 @@ let textFormatter: TextFormatter | null = null;
 let pasteService: PasteService | null = null;
 let databaseService: DatabaseService | null = null;
 let searchService: SearchService | null = null;
+let dictionaryService: DictionaryService | null = null;
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -216,9 +218,10 @@ app.on('ready', () => {
   textFormatter = new TextFormatter(apiKey);
   pasteService = new PasteService();
 
-  // Initialize database and search services
+  // Initialize database, search, and dictionary services
   databaseService = new DatabaseService();
   searchService = new SearchService(databaseService);
+  dictionaryService = new DictionaryService(databaseService.getDb());
 
   createWindow();
   createOverlayWindow();
@@ -784,6 +787,99 @@ ipcMain.handle('db:get-stats', () => {
     return { success: true, stats };
   } catch (error) {
     log.error('Error getting stats:', error);
+    throw error;
+  }
+});
+
+// Dictionary IPC Handlers
+
+ipcMain.handle('dict:add-entry', (_event: IpcMainInvokeEvent, data: DictionaryEntryInsert) => {
+  if (!dictionaryService) throw new Error('Dictionary service not initialized');
+  try {
+    const id = dictionaryService.addEntry(data);
+    return { success: true, id };
+  } catch (error: any) {
+    log.error('Error adding dictionary entry:', error);
+    if (error.message?.includes('UNIQUE constraint')) {
+      return { success: false, error: 'An entry with this phrase already exists' };
+    }
+    throw error;
+  }
+});
+
+ipcMain.handle('dict:get-entries', () => {
+  if (!dictionaryService) throw new Error('Dictionary service not initialized');
+  try {
+    const entries = dictionaryService.getAllEntries();
+    return { success: true, entries };
+  } catch (error) {
+    log.error('Error getting dictionary entries:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('dict:get-entry', (_event: IpcMainInvokeEvent, id: number) => {
+  if (!dictionaryService) throw new Error('Dictionary service not initialized');
+  try {
+    const entry = dictionaryService.getEntry(id);
+    return { success: true, entry };
+  } catch (error) {
+    log.error('Error getting dictionary entry:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('dict:update-entry', (_event: IpcMainInvokeEvent, id: number, updates: Partial<DictionaryEntryInsert> & { is_enabled?: boolean }) => {
+  if (!dictionaryService) throw new Error('Dictionary service not initialized');
+  try {
+    dictionaryService.updateEntry(id, updates);
+    return { success: true };
+  } catch (error) {
+    log.error('Error updating dictionary entry:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('dict:delete-entry', (_event: IpcMainInvokeEvent, id: number) => {
+  if (!dictionaryService) throw new Error('Dictionary service not initialized');
+  try {
+    dictionaryService.deleteEntry(id);
+    return { success: true };
+  } catch (error) {
+    log.error('Error deleting dictionary entry:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('dict:toggle-enabled', (_event: IpcMainInvokeEvent, id: number) => {
+  if (!dictionaryService) throw new Error('Dictionary service not initialized');
+  try {
+    dictionaryService.toggleEnabled(id);
+    return { success: true };
+  } catch (error) {
+    log.error('Error toggling dictionary entry:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('dict:apply-replacements', (_event: IpcMainInvokeEvent, text: string) => {
+  if (!dictionaryService) throw new Error('Dictionary service not initialized');
+  try {
+    const result = dictionaryService.applyReplacements(text);
+    return { success: true, result };
+  } catch (error) {
+    log.error('Error applying dictionary replacements:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('dict:get-stats', () => {
+  if (!dictionaryService) throw new Error('Dictionary service not initialized');
+  try {
+    const stats = dictionaryService.getStats();
+    return { success: true, stats };
+  } catch (error) {
+    log.error('Error getting dictionary stats:', error);
     throw error;
   }
 });

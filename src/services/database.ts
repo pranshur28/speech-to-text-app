@@ -153,6 +153,35 @@ export class DatabaseService {
 
       log.info('[DatabaseService] Migration complete. Schema version: 1');
     }
+
+    // Migration to version 2: Add dictionary_entries table
+    if (version === 1 || version === 0) {
+      const currentVersion = this.getSchemaVersion();
+      if (currentVersion === 1) {
+        log.info('[DatabaseService] Running migration to version 2...');
+
+        this.db.exec(`
+          -- Custom dictionary entries table for user-defined replacements
+          CREATE TABLE IF NOT EXISTS dictionary_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            spoken_phrase TEXT NOT NULL UNIQUE,
+            replacement TEXT NOT NULL,
+            is_case_sensitive INTEGER DEFAULT 0,
+            is_enabled INTEGER DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          );
+
+          -- Index for fast lookup during text processing
+          CREATE INDEX IF NOT EXISTS idx_dictionary_spoken ON dictionary_entries(spoken_phrase);
+          CREATE INDEX IF NOT EXISTS idx_dictionary_enabled ON dictionary_entries(is_enabled);
+
+          UPDATE schema_version SET version = 2;
+        `);
+
+        log.info('[DatabaseService] Migration complete. Schema version: 2');
+      }
+    }
   }
 
   private getSchemaVersion(): number {
@@ -418,6 +447,12 @@ export class DatabaseService {
       favorites: favorites.count,
       totalTags: totalTags.count
     };
+  }
+
+  // Database access for other services
+
+  getDb(): Database.Database {
+    return this.db;
   }
 
   // Cleanup

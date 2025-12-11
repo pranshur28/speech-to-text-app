@@ -31,6 +31,15 @@ export interface IElectronAPI {
   dbToggleFavorite: (id: number) => Promise<{ success: boolean }>;
   dbExport: (ids: number[], format: 'json' | 'markdown' | 'txt') => Promise<{ success: boolean; data: string }>;
   dbGetStats: () => Promise<{ success: boolean; stats: { total: number; favorites: number; totalTags: number } }>;
+  // Dictionary API
+  dictAddEntry: (data: { spoken_phrase: string; replacement: string; is_case_sensitive?: boolean }) => Promise<{ success: boolean; id?: number; error?: string }>;
+  dictGetEntries: () => Promise<{ success: boolean; entries: any[] }>;
+  dictGetEntry: (id: number) => Promise<{ success: boolean; entry: any }>;
+  dictUpdateEntry: (id: number, updates: any) => Promise<{ success: boolean }>;
+  dictDeleteEntry: (id: number) => Promise<{ success: boolean }>;
+  dictToggleEnabled: (id: number) => Promise<{ success: boolean }>;
+  dictApplyReplacements: (text: string) => Promise<{ success: boolean; result: string }>;
+  dictGetStats: () => Promise<{ success: boolean; stats: { total: number; enabled: number } }>;
 }
 
 const electronAPI: IElectronAPI = {
@@ -83,6 +92,15 @@ const electronAPI: IElectronAPI = {
   dbToggleFavorite: (id: number) => ipcRenderer.invoke('db:toggle-favorite', id),
   dbExport: (ids: number[], format: 'json' | 'markdown' | 'txt') => ipcRenderer.invoke('db:export', ids, format),
   dbGetStats: () => ipcRenderer.invoke('db:get-stats'),
+  // Dictionary API
+  dictAddEntry: (data: { spoken_phrase: string; replacement: string; is_case_sensitive?: boolean }) => ipcRenderer.invoke('dict:add-entry', data),
+  dictGetEntries: () => ipcRenderer.invoke('dict:get-entries'),
+  dictGetEntry: (id: number) => ipcRenderer.invoke('dict:get-entry', id),
+  dictUpdateEntry: (id: number, updates: any) => ipcRenderer.invoke('dict:update-entry', id, updates),
+  dictDeleteEntry: (id: number) => ipcRenderer.invoke('dict:delete-entry', id),
+  dictToggleEnabled: (id: number) => ipcRenderer.invoke('dict:toggle-enabled', id),
+  dictApplyReplacements: (text: string) => ipcRenderer.invoke('dict:apply-replacements', text),
+  dictGetStats: () => ipcRenderer.invoke('dict:get-stats'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

@@ -26,6 +26,21 @@ YOUR TASK:
 4. Remove filler words like "uh", "um", "like", "you know" while preserving meaning
 5. Make the text readable and well-structured
 
+MATHEMATICAL CONTENT - USE UNICODE SYMBOLS:
+When you detect mathematical content, convert to Unicode characters (NOT LaTeX):
+
+Superscripts: "x squared" → "x²", "x cubed" → "x³", "x to the 4th" → "x⁴"
+  Use: ⁰ ¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹ ⁿ ⁱ
+Subscripts: "x sub 1" → "x₁", "a sub n" → "aₙ"
+  Use: ₀ ₁ ₂ ₃ ₄ ₅ ₆ ₇ ₈ ₉ ₙ ᵢ ⱼ
+Greek letters: "alpha" → "α", "beta" → "β", "gamma" → "γ", "delta" → "δ", "theta" → "θ", "lambda" → "λ", "mu" → "μ", "pi" → "π", "sigma" → "σ", "phi" → "φ", "omega" → "ω"
+Operators: "plus or minus" → "±", "times" → "×", "divided by" → "÷", "dot" → "·"
+Relations: "not equal" → "≠", "less than or equal" → "≤", "greater than or equal" → "≥", "approximately" → "≈", "equivalent" → "≡"
+Symbols: "infinity" → "∞", "square root" → "√", "partial" → "∂", "integral" → "∫", "sum" → "∑", "product" → "∏"
+Set theory: "element of" / "in" → "∈", "not in" → "∉", "subset" → "⊂", "superset" → "⊃", "union" → "∪", "intersection" → "∩", "empty set" → "∅"
+Logic: "for all" → "∀", "there exists" → "∃", "therefore" → "∴", "because" → "∵", "and" (logic) → "∧", "or" (logic) → "∨", "not" → "¬", "implies" → "→"
+Arrows: "right arrow" → "→", "left arrow" → "←", "double arrow" → "⇒", "if and only if" → "⇔"
+
 OUTPUT: Return ONLY the formatted text. No explanations, no markdown, no commentary.`;
 
       const response = await this.openai.chat.completions.create({

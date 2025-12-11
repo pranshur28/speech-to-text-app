@@ -4,6 +4,7 @@ import { SearchView } from './SearchView';
 import TabBar, { TabType } from './components/TabBar';
 import PersistentHeader, { RecordingStatus } from './components/PersistentHeader';
 import ContextualFooter from './components/ContextualFooter';
+import { DictionarySettings } from './components/DictionarySettings';
 import * as Switch from '@radix-ui/react-switch';
 
 interface Transcription {
@@ -378,10 +379,14 @@ export default function App() {
           const formatResult = await window.electronAPI.formatText(transcribeResult.transcript);
 
           if (formatResult.success) {
+            // Apply custom dictionary replacements AFTER GPT formatting
+            const dictResult = await window.electronAPI.dictApplyReplacements(formatResult.formatted);
+            const finalText = dictResult.success ? dictResult.result : formatResult.formatted;
+
             // Save to database
             const dbResult = await window.electronAPI.dbSaveTranscription({
               raw_text: transcribeResult.transcript,
-              formatted_text: formatResult.formatted,
+              formatted_text: finalText,
               timestamp: Date.now(),
               formatting_profile: 'casual',
               is_favorite: 0
@@ -396,7 +401,7 @@ export default function App() {
             }
 
             setStatus('Pasting...');
-            await window.electronAPI.pasteText(formatResult.formatted);
+            await window.electronAPI.pasteText(finalText);
             setStatus('Done');
           }
         }
@@ -760,6 +765,9 @@ export default function App() {
               </div>
               <div className="setting-description">Hold the in-app button to record</div>
             </div>
+
+            {/* Custom Dictionary */}
+            <DictionarySettings />
           </div>
         </div>
       </div>
