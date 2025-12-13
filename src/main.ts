@@ -81,7 +81,7 @@ const createWindow = () => {
 
 const createOverlayWindow = () => {
   overlayWindow = new BrowserWindow({
-    width: 180,
+    width: 240,
     height: 50,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -103,7 +103,7 @@ const createOverlayWindow = () => {
   const { screen } = require('electron');
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
-  overlayWindow.setPosition(Math.round(width / 2 - 90), height - 80);
+  overlayWindow.setPosition(Math.round(width / 2 - 120), height - 80);
 
   const isDev = !app.isPackaged;
   const startUrl = isDev

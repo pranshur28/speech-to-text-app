@@ -19,9 +19,24 @@ files:
   - "!**/._*"
   - "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}"
   - "!**/{tsconfig.json,tsconfig.*.json}"
+  # Exclude native module build artifacts (CRITICAL for size reduction)
+  - "!**/node_modules/**/build/**/*"
+  - "!**/node_modules/**/deps/**/*"
+  - "!**/node_modules/**/src/**/*.{c,cc,cpp,h,hpp}"
+  - "!**/node_modules/**/{binding.gyp,Makefile,*.mk}"
+  - "!**/node_modules/**/*.{a,lib,obj}"
+  - "!**/node_modules/**/prebuilds/**/*"
+  - "!**/node_modules/**/{doc,docs,documentation}/**/*"
+  - "!**/node_modules/**/{man,man1,man2,man3}/**/*"
+  - "!**/node_modules/**/*.map"
 
 # Enable asar for faster loading and smaller size
 asar: true
+
+# Unpack native modules (they can't run from inside asar)
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**/*.node"
+  - "**/node_modules/uiohook-napi/**/*.node"
 
 win:
   target:
@@ -49,5 +64,5 @@ linux:
   category: Office
   icon: assets/icon.png
 
-# Compression for smaller downloads
-compression: normal
+# Compression for smaller downloads (maximum = smallest size, slower build)
+compression: maximum

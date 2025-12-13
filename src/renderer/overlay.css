@@ -6,35 +6,12 @@
     width: 100vw;
 }
 
+/* Chromeless container - no background, just layout */
 .overlay-pill {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 14px;
-    background: rgba(20, 20, 20, 0.85);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow:
-        0 4px 24px rgba(0, 0, 0, 0.5),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    position: relative;
-    overflow: hidden;
-}
-
-/* Glass shine effect */
-.overlay-pill::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.1) 0%,
-        rgba(255, 255, 255, 0) 50%
-    );
-    border-radius: inherit;
-    pointer-events: none;
+    gap: 16px;
+    padding: 8px 0;
 }
 
 .soundwave-container {
@@ -58,14 +35,20 @@
     box-shadow: 0 0 4px rgba(99, 102, 241, 0.4);
 }
 
-/* Overlay control buttons */
+/* Floating control buttons container */
 .overlay-controls {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-left: 4px;
-    padding-left: 10px;
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 6px 10px;
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .overlay-btn {
