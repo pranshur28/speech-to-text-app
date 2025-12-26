@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"cd ''C:\\Users\\prans\\speech-to-text-app''; npm install\")",
+      "Bash(powershell:*)"
+    ]
+  }
+}

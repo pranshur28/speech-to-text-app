@@ -2,7 +2,7 @@ appId: com.speechtotext.app
 productName: Speech to Text
 directories:
   buildResources: assets
-  output: dist
+  output: release
 
 # Only include what's needed - electron-builder auto-prunes devDependencies
 files:
@@ -19,13 +19,16 @@ files:
   - "!**/._*"
   - "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}"
   - "!**/{tsconfig.json,tsconfig.*.json}"
-  # Exclude native module build artifacts (CRITICAL for size reduction)
+  # Exclude native module build artifacts (but keep better-sqlite3 build)
   - "!**/node_modules/**/build/**/*"
+  - "**/node_modules/better-sqlite3/build/Release/*.node"
   - "!**/node_modules/**/deps/**/*"
   - "!**/node_modules/**/src/**/*.{c,cc,cpp,h,hpp}"
   - "!**/node_modules/**/{binding.gyp,Makefile,*.mk}"
   - "!**/node_modules/**/*.{a,lib,obj}"
+  # Keep uiohook-napi prebuilds (needed for global keyboard hooks)
   - "!**/node_modules/**/prebuilds/**/*"
+  - "**/node_modules/uiohook-napi/prebuilds/**/*"
   - "!**/node_modules/**/{doc,docs,documentation}/**/*"
   - "!**/node_modules/**/{man,man1,man2,man3}/**/*"
   - "!**/node_modules/**/*.map"
