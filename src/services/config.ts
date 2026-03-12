@@ -5,6 +5,7 @@ import log from '../utils/logger';
 
 interface Config {
   openaiApiKey?: string;
+  deepgramApiKey?: string;
   toggleShortcut?: string;
   holdShortcut?: string;
 }
@@ -77,6 +78,15 @@ export class ConfigService {
 
   setHoldShortcut(shortcut: string): void {
     this.config.holdShortcut = shortcut;
+    this.save();
+  }
+
+  getDeepgramApiKey(): string | undefined {
+    return this.config.deepgramApiKey || process.env.DEEPGRAM_API_KEY;
+  }
+
+  setDeepgramApiKey(key: string): void {
+    this.config.deepgramApiKey = key;
     this.save();
   }
 }

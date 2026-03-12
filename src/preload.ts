@@ -3,6 +3,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 export interface IElectronAPI {
   transcribeAudio: (audioBuffer: ArrayBuffer) => Promise<{ success: boolean; transcript: string }>;
   formatText: (text: string) => Promise<{ success: boolean; formatted: string }>;
+  transcribeAndTypeSegment: (audioBuffer: ArrayBuffer) => Promise<{ success: boolean; transcript: string; formatted: string }>;
+  formatAndTypeStream: (rawText: string) => Promise<{ success: boolean; formatted: string }>;
+  onStreamChunk: (callback: (chunk: string) => void) => () => void;
   pasteText: (text: string) => Promise<{ success: boolean }>;
   selectAudioFile: () => Promise<{ cancelled: boolean; filePath: string | null }>;
   onToggleRecording: (callback: () => void) => () => void;
@@ -40,11 +43,25 @@ export interface IElectronAPI {
   dictToggleEnabled: (id: number) => Promise<{ success: boolean }>;
   dictApplyReplacements: (text: string) => Promise<{ success: boolean; result: string }>;
   dictGetStats: () => Promise<{ success: boolean; stats: { total: number; enabled: number } }>;
+  // Deepgram Streaming API
+  deepgramStartSession: () => Promise<{ success: boolean; error?: string }>;
+  deepgramSendAudioChunk: (data: ArrayBuffer) => void;
+  deepgramStopSession: () => Promise<{ success: boolean; transcript: string; formatted: string }>;
+  onDeepgramTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => () => void;
+  getDeepgramApiKey: () => Promise<string>;
+  saveDeepgramApiKey: (key: string) => Promise<{ success: boolean; error: string | null }>;
 }
 
 const electronAPI: IElectronAPI = {
   transcribeAudio: (audioBuffer: ArrayBuffer) => ipcRenderer.invoke('transcribe-audio', audioBuffer),
   formatText: (text: string) => ipcRenderer.invoke('format-text', text),
+  transcribeAndTypeSegment: (audioBuffer: ArrayBuffer) => ipcRenderer.invoke('transcribe-and-type-segment', audioBuffer),
+  formatAndTypeStream: (rawText: string) => ipcRenderer.invoke('format-and-type-stream', rawText),
+  onStreamChunk: (callback: (chunk: string) => void) => {
+    const handler = (_event: any, chunk: string) => callback(chunk);
+    ipcRenderer.on('stream-chunk', handler);
+    return () => ipcRenderer.removeListener('stream-chunk', handler);
+  },
   pasteText: (text: string) => ipcRenderer.invoke('paste-text', text),
   selectAudioFile: () => ipcRenderer.invoke('select-audio-file'),
   onToggleRecording: (callback: () => void) => {
@@ -101,6 +118,17 @@ const electronAPI: IElectronAPI = {
   dictToggleEnabled: (id: number) => ipcRenderer.invoke('dict:toggle-enabled', id),
   dictApplyReplacements: (text: string) => ipcRenderer.invoke('dict:apply-replacements', text),
   dictGetStats: () => ipcRenderer.invoke('dict:get-stats'),
+  // Deepgram Streaming API
+  deepgramStartSession: () => ipcRenderer.invoke('deepgram:start-session'),
+  deepgramSendAudioChunk: (data: ArrayBuffer) => ipcRenderer.send('deepgram:audio-chunk', data),
+  deepgramStopSession: () => ipcRenderer.invoke('deepgram:stop-session'),
+  onDeepgramTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => {
+    const handler = (_event: any, data: { text: string; isFinal: boolean }) => callback(data);
+    ipcRenderer.on('deepgram:transcript', handler);
+    return () => ipcRenderer.removeListener('deepgram:transcript', handler);
+  },
+  getDeepgramApiKey: () => ipcRenderer.invoke('get-deepgram-api-key'),
+  saveDeepgramApiKey: (key: string) => ipcRenderer.invoke('save-deepgram-api-key', key),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

@@ -1,20 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './overlay.css';
 
 export default function Overlay() {
     const [waveform, setWaveform] = useState<number[]>(new Array(12).fill(0));
     const [isPaused, setIsPaused] = useState(false);
+    const isPausedRef = useRef(false);
+
+    // Keep ref in sync with state
+    useEffect(() => {
+        isPausedRef.current = isPaused;
+    }, [isPaused]);
 
     useEffect(() => {
         // Make body transparent for overlay window
         document.body.style.background = 'transparent';
 
-        console.log('[OVERLAY] Component mounted, waiting for audio data...');
-
         // Listen for audio data from main app
         const unsubscribe = window.electronAPI.onAudioData((data: any) => {
-            console.log('[OVERLAY] Received audio data:', data);
-            if (data?.waveform && !isPaused) {
+            if (data?.waveform && !isPausedRef.current) {
                 // Take only 12 bars for a smaller display
                 const reducedWaveform = data.waveform.slice(0, 12);
                 setWaveform(reducedWaveform);
@@ -24,7 +27,7 @@ export default function Overlay() {
         return () => {
             unsubscribe();
         };
-    }, [isPaused]);
+    }, []);
 
     // Handle mouse enter/leave for enabling/disabling click-through
     const handleMouseEnterInteractive = () => {
@@ -49,9 +52,8 @@ export default function Overlay() {
     return (
         <div className="overlay-container">
             <div className="overlay-pill">
-                <div className="soundwave-container">
+                <div className="waveform-capsule">
                     {waveform.map((value, index) => {
-                        // Mirror the bars around center for symmetry
                         const centerIndex = waveform.length / 2;
                         const distanceFromCenter = Math.abs(index - centerIndex + 0.5);
                         const mirrorIndex = index < centerIndex
@@ -59,17 +61,21 @@ export default function Overlay() {
                             : Math.floor(centerIndex + distanceFromCenter - 1);
                         const mirroredValue = waveform[Math.min(mirrorIndex, waveform.length - 1)];
 
-                        // Minimum height + scaled height based on audio (smaller max height)
-                        const height = 3 + (isPaused ? 0 : mirroredValue * 24);
-                        const opacity = isPaused ? 0.3 : (0.4 + mirroredValue * 0.6);
+                        const height = isPaused ? 4 : 4 + mirroredValue * 22;
+                        const intensity = isPaused ? 0 : mirroredValue;
+
+                        // Green → Yellow → Red based on intensity
+                        const r = Math.round(intensity > 0.5 ? 255 : intensity * 2 * 255);
+                        const g = Math.round(intensity < 0.5 ? 200 + intensity * 110 : (1 - intensity) * 2 * 255);
+                        const color = `rgb(${r}, ${g}, 50)`;
 
                         return (
                             <div
                                 key={index}
-                                className="soundwave-bar"
+                                className={`eq-bar ${isPaused ? 'paused' : ''}`}
                                 style={{
                                     height: `${height}px`,
-                                    opacity: opacity,
+                                    backgroundColor: color,
                                 }}
                             />
                         );

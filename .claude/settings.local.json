@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(powershell -Command \"cd ''C:\\Users\\prans\\speech-to-text-app''; npm install\")",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "WebFetch(domain:developers.deepgram.com)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(find src:*)"
     ]
   }
 }
