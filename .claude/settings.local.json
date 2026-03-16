@@ -9,7 +9,8 @@
       "WebFetch(domain:developers.deepgram.com)",
       "WebFetch(domain:github.com)",
       "WebSearch",
-      "Bash(find src:*)"
+      "Bash(find src:*)",
+      "Bash(find:*)"
     ]
   }
 }

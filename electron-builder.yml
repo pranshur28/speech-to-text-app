@@ -22,6 +22,7 @@ files:
   # Exclude native module build artifacts (but keep better-sqlite3 build)
   - "!**/node_modules/**/build/**/*"
   - "**/node_modules/better-sqlite3/build/Release/*.node"
+  - "**/node_modules/@nut-tree-fork/libnut-win32/build/Release/*"
   - "!**/node_modules/**/deps/**/*"
   - "!**/node_modules/**/src/**/*.{c,cc,cpp,h,hpp}"
   - "!**/node_modules/**/{binding.gyp,Makefile,*.mk}"
@@ -40,6 +41,8 @@ asar: true
 asarUnpack:
   - "**/node_modules/better-sqlite3/**/*.node"
   - "**/node_modules/uiohook-napi/**/*.node"
+  - "**/node_modules/@nut-tree-fork/libnut-win32/**/*.node"
+  - "**/node_modules/@nut-tree-fork/libnut-win32/**/*.dll"
 
 win:
   target:
