@@ -10,3 +10,5 @@ out/
 *.swo
 *~
 .vscode/
+release/
+dist-release/
