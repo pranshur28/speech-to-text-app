@@ -37,3 +37,31 @@ This document tracks problems encountered and the fixes applied.
 **Files Changed:**
 - `electron-builder.yml`
 - `package.json`
+
+---
+
+## Problem 2: Push-to-talk paste stops recording and types hotkey characters
+
+**Date:** 2026-03-16
+
+**Symptom:** During push-to-talk (e.g. Ctrl+Shift+X held down), when Deepgram returns a finalized transcript and the app pastes it via Ctrl+V, recording stops prematurely. The remaining held key (X) gets typed as literal "x x x x" into the focused app.
+
+**Root Cause:** `PasteService.paste()` uses nut-js to simulate `Ctrl+V` at the OS level. `uIOhook` (the global hotkey listener) sees these synthetic keystrokes as real events. When nut-js releases Ctrl as part of the paste, two things go wrong:
+1. The `pressedKeys` set in `ShortcutManager` gets corrupted — Ctrl is removed even though the user is still physically holding it.
+2. The OS itself considers Ctrl released, so the still-held X key becomes a literal typed "x".
+
+This same key state corruption also broke **toggle mode** — the `checkModifiers()` strict equality check would fail on the second press because ghost modifier entries from paste polluted the `pressedKeys` set.
+
+**Fix Applied:**
+
+1. **`ShortcutManager` — paste mode** — Added `enterPasteMode()` / `exitPasteMode()` methods. During paste mode, all uIOhook key events are ignored (no `pressedKeys` updates, no shortcut triggers). On exit, `pressedKeys` is restored from a pre-paste snapshot.
+
+2. **`PasteService.paste()` — modifier-aware** — Now accepts optional `heldModifiers` parameter. On Windows, if Ctrl is already physically held (push-to-talk), only simulates V press/release (Ctrl is already down at OS level). This avoids releasing the user's physical Ctrl.
+
+3. **Deepgram IPC and audio-transcription IPC** — All paste calls now enter/exit paste mode and pass held modifier info to the paste service.
+
+**Files Changed:**
+- `src/shortcuts/shortcut-manager.ts`
+- `src/services/paste.ts`
+- `src/ipc/deepgram.ts`
+- `src/ipc/audio-transcription.ts`

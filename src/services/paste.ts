@@ -24,7 +24,14 @@ export class PasteService {
     }
   }
 
-  async paste(text: string): Promise<void> {
+  /**
+   * Paste text via clipboard + Ctrl/Cmd+V simulation.
+   * @param text - The text to paste.
+   * @param heldModifiers - Modifier keys already physically held (e.g. during push-to-talk).
+   *   When provided, avoids re-pressing/releasing modifiers the user is holding, preventing
+   *   OS-level state corruption that would turn held hotkey keys into literal typed characters.
+   */
+  async paste(text: string, heldModifiers?: { ctrlHeld?: boolean; shiftHeld?: boolean; altHeld?: boolean; metaHeld?: boolean }): Promise<void> {
     try {
       // Use Electron's clipboard API for proper Unicode support across all platforms
       clipboard.writeText(text);
@@ -38,8 +45,17 @@ export class PasteService {
       } else if (process.platform === 'win32') {
         // Use nut-js for fast native key simulation (avoids ~500ms PowerShell spawn)
         const { keyboard, Key } = require('@nut-tree-fork/nut-js');
-        await keyboard.pressKey(Key.LeftControl, Key.V);
-        await keyboard.releaseKey(Key.LeftControl, Key.V);
+
+        if (heldModifiers?.ctrlHeld) {
+          // Ctrl is already physically held by the user (push-to-talk hotkey).
+          // Only simulate V press/release — Ctrl is already down at the OS level,
+          // so this still triggers Ctrl+V without corrupting the modifier state.
+          await keyboard.pressKey(Key.V);
+          await keyboard.releaseKey(Key.V);
+        } else {
+          await keyboard.pressKey(Key.LeftControl, Key.V);
+          await keyboard.releaseKey(Key.LeftControl, Key.V);
+        }
       } else {
         // Linux - use xdotool if available
         try {

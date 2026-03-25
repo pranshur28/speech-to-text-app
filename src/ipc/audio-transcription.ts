@@ -75,7 +75,13 @@ export function registerAudioTranscriptionHandlers(ctx: ServiceContext) {
     const pasteService = ctx.getPasteService();
     if (!pasteService) throw new Error('Paste service not initialized');
     try {
-      await pasteService.paste(text);
+      const shortcutMgr = ctx.getShortcutManager();
+      const heldModifiers = shortcutMgr.enterPasteMode();
+      try {
+        await pasteService.paste(text, heldModifiers);
+      } finally {
+        shortcutMgr.exitPasteMode();
+      }
       return { success: true };
     } catch (error) {
       log.error('Error pasting:', error);

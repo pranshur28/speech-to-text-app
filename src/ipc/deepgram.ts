@@ -45,7 +45,15 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
               toPaste = dict.applyReplacements(toPaste);
             }
             try {
-              await pasteService.paste(toPaste + ' ');
+              // Enter paste mode: freeze hotkey tracking and get currently held modifiers
+              // so paste doesn't corrupt key state or release user's physical modifier keys
+              const shortcutMgr = ctx.getShortcutManager();
+              const heldModifiers = shortcutMgr.enterPasteMode();
+              try {
+                await pasteService.paste(toPaste + ' ', heldModifiers);
+              } finally {
+                shortcutMgr.exitPasteMode();
+              }
             } catch (err) {
               log.error('Error pasting live transcript:', err);
             }

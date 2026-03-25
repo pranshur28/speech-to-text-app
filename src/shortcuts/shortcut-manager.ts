@@ -18,8 +18,40 @@ export class ShortcutManager {
   private pressedKeys = new Set<number>();
   private getMainWindow: () => BrowserWindow | null;
 
+  // Paste mode: when true, ignore synthetic key events from paste simulation
+  private inPasteMode = false;
+  private pressedKeysSnapshot: Set<number> | null = null;
+
   constructor(getMainWindow: () => BrowserWindow | null) {
     this.getMainWindow = getMainWindow;
+  }
+
+  /**
+   * Enter paste mode: freezes pressedKeys tracking so synthetic Ctrl+V events
+   * from nut-js don't corrupt the hotkey state.
+   * Returns which modifier keys are currently physically held.
+   */
+  enterPasteMode(): { ctrlHeld: boolean; shiftHeld: boolean; altHeld: boolean; metaHeld: boolean } {
+    this.inPasteMode = true;
+    this.pressedKeysSnapshot = new Set(this.pressedKeys);
+    return {
+      ctrlHeld: this.pressedKeys.has(UiohookKey.Ctrl) || this.pressedKeys.has(UiohookKey.CtrlRight),
+      shiftHeld: this.pressedKeys.has(UiohookKey.Shift) || this.pressedKeys.has(UiohookKey.ShiftRight),
+      altHeld: this.pressedKeys.has(UiohookKey.Alt) || this.pressedKeys.has(UiohookKey.AltRight),
+      metaHeld: this.pressedKeys.has(UiohookKey.Meta) || this.pressedKeys.has(UiohookKey.MetaRight),
+    };
+  }
+
+  /**
+   * Exit paste mode: restores pressedKeys to the pre-paste snapshot so hotkey
+   * detection continues accurately.
+   */
+  exitPasteMode(): void {
+    if (this.pressedKeysSnapshot) {
+      this.pressedKeys = this.pressedKeysSnapshot;
+      this.pressedKeysSnapshot = null;
+    }
+    this.inPasteMode = false;
   }
 
   getToggleShortcut(): string { return this.toggleShortcut; }
@@ -184,6 +216,10 @@ export class ShortcutManager {
     uIOhook.removeAllListeners('keyup');
 
     uIOhook.on('keydown', (e: any) => {
+      // During paste mode, ignore all key events to prevent synthetic
+      // Ctrl+V keystrokes from corrupting hotkey tracking state
+      if (this.inPasteMode) return;
+
       this.pressedKeys.add(e.keycode);
 
       if (toggleKeys && toggleKeys.key !== null && e.keycode === toggleKeys.key) {
@@ -206,6 +242,10 @@ export class ShortcutManager {
     });
 
     uIOhook.on('keyup', (e: any) => {
+      // During paste mode, ignore all key events to prevent synthetic
+      // Ctrl+V keystrokes from corrupting hotkey tracking state
+      if (this.inPasteMode) return;
+
       this.pressedKeys.delete(e.keycode);
 
       if (toggleKeys && toggleKeys.key !== null && e.keycode === toggleKeys.key) {
