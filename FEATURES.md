@@ -1,7 +1,7 @@
 # Speech-to-Text App - Feature Documentation
 
 ## Overview
-A powerful, polished note-taking companion that transforms speech into searchable, organized, and beautifully formatted text.
+A powerful, polished note-taking companion that transforms speech into searchable, organized, and beautifully formatted text — with real-time streaming transcription.
 
 **Target Use Case**: General note-taking (capturing thoughts, ideas, TODOs throughout the day)
 
@@ -23,33 +23,62 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Status**: Implemented & Tested
 
 - **Real-time audio recording** from microphone
-- **Toggle mode**: Click button to start/stop recording
-- **Push-to-Talk mode**: Hold button while speaking
+- **Toggle mode**: Click button or press shortcut to start/stop recording
+- **Push-to-Talk mode**: Hold shortcut while speaking
+- **Pause/Resume**: Pause recording mid-session and resume
 - **File upload**: Transcribe existing audio files (mp3, wav, flac, ogg, aac, m4a)
-- **OpenAI Whisper API** for high-accuracy transcription
-- **GPT-4o-mini** for intelligent text formatting
+- **Dual transcription engines**:
+  - **Deepgram Nova-3**: Real-time streaming via WebSocket with interim results, smart formatting, and 300ms endpointing
+  - **OpenAI Whisper**: Batch transcription for file uploads
+- **GPT-4o-mini** for intelligent text formatting:
   - Automatic punctuation and capitalization
   - Paragraph breaks
   - Filler word removal (um, uh, etc.)
+  - Mathematical notation support (Unicode symbols, Greek letters, superscripts, operators)
+
+### ✅ Deepgram Streaming Transcription
+**Status**: Implemented & Tested
+
+- **WebSocket connection** to Deepgram Nova-3 model
+- **Real-time interim results** displayed during recording
+- **Final transcript accumulation** across the session
+- **Smart formatting and punctuation** built into the stream
+- **Keepalive mechanism** (5s interval) to prevent idle disconnections
+- **Graceful shutdown** with 2s timeout for final results
+- **Live paste**: Text is pasted as it streams in
+
+### ✅ Custom Dictionary
+**Status**: Implemented & Tested
+
+- **Custom phrase replacements**: Define spoken phrase → replacement text mappings
+- **Case sensitivity options**: Per-entry case-sensitive or case-insensitive matching
+- **Enable/disable toggles**: Deactivate entries without deleting them
+- **Automatic application**: Replacements applied after AI formatting
+- **Longest-match-first ordering**: Prevents partial match conflicts
+- **Settings UI**: Full CRUD interface with inline editing
+- **Unique constraint**: Prevents duplicate spoken phrases
 
 ### ✅ Global Shortcuts
 **Status**: Implemented & Tested
 
 - **Customizable toggle shortcut**: Default `Command+Shift+Space` (macOS) or `Ctrl+Shift+Space` (Windows/Linux)
-- **Customizable hold shortcut**: Assign any single key for continuous recording
+- **Customizable hold shortcut**: Assign any key combination for continuous recording
 - **Works even when app is not in focus** using uiohook-napi
 - **Visual shortcut recorder** with modifier key detection
 - **Warning system** for common keys that might interfere with typing
+- **Paste mode**: Freezes key state during clipboard operations to prevent modifier corruption during push-to-talk
+- **Globe/Fn key support** (keycode 179)
 
 ### ✅ Visual Feedback
 **Status**: Implemented & Tested
 
 - **Audio visualization overlay** during recording
-  - 16 animated bars responding to audio volume
-  - Real-time waveform display
+  - 12 animated bars responding to audio volume
+  - Color-coded intensity (green → yellow → red)
   - Bottom-center screen positioning
-  - Click-through design (doesn't steal focus)
-- **Status indicators**: Ready, Listening, Thinking, Formatting, Pasting, Done
+  - Click-through design (doesn't steal focus, hover to interact)
+  - Pause/Resume and Stop buttons
+- **Status indicators**: Ready, Starting, Recording, Paused, Processing
 - **Ripple animations** on record button
 - **Color-coded states** for visual clarity
 
@@ -57,15 +86,20 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Status**: Implemented & Tested
 
 - **Auto-paste** formatted text directly into any application
-- **Cross-platform paste support** (macOS, Windows, Linux)
-- **Recent transcriptions history** (last 20 shown in UI)
+- **Cross-platform paste support**:
+  - Windows: Native keyboard simulation via @nut-tree-fork/nut-js
+  - macOS: AppleScript + clipboard for Unicode support
+  - Linux: xdotool if available
+- **Paste mode**: Coordinates with ShortcutManager to track held modifiers and prevent key state corruption
+- **Serialized paste queue**: Ensures paste operations never overlap
+- **Recent transcriptions history** with virtual scrolling
 - **Background operation** with system tray icon
 - **Minimize to tray** instead of quit
 
-### ✅ Persistent Storage & Search (Phase 1 - Complete)
-**Status**: Implemented & Tested (70 tests passing)
+### ✅ Persistent Storage & Search
+**Status**: Implemented & Tested (~131 tests)
 
-- **SQLite database** with FTS5 full-text search
+- **SQLite database** with FTS5 full-text search (schema v2)
 - **Automatic save** of all transcriptions
 - **Data persists** across app restarts
 - **Auto-backup** on app exit (creates .bak file)
@@ -75,6 +109,7 @@ A powerful, polished note-taking companion that transforms speech into searchabl
   - Results ranked by relevance
   - Filter by favorite status
   - Filter by date range
+  - Advanced query syntax: `tag:work`, `#meeting`, `fav:true`, `date:today|week|month`
   - Pagination support
 - **Export functionality**:
   - Export to JSON (full data)
@@ -85,18 +120,25 @@ A powerful, polished note-taking companion that transforms speech into searchabl
   - Favorites count
   - Total tags count
 
+### ✅ Search & Browse UI
+**Status**: Implemented & Tested
+
+- **SearchBar**: Debounced search (300ms) with special filter syntax parsing
+- **NoteList**: Virtualized scrolling via react-window for 10,000+ notes
+- **NoteCard**: Timestamp, formatted text preview, favorite indicator
+- **NoteDetailModal**: Full view with re-paste, copy, delete, export actions
+- **FilterPanel**: Date range, favorites, tag filters
+- **Tab navigation**: Recording, History/Search, Settings tabs
+
 ### ✅ Configuration & Settings
 **Status**: Implemented & Tested
 
-- **OpenAI API key management**
-  - Secure local storage (not in cloud)
-  - Validation on save
-  - Error messages for invalid keys
-- **Push-to-Talk toggle**
-  - Persisted in localStorage
-  - Changes button behavior
-- **Settings modal** with dark glass effect
-- **Keyboard shortcut customization**
+- **OpenAI API key management** with validation
+- **Deepgram API key management**
+- **Push-to-Talk toggle** persisted in localStorage
+- **Custom dictionary management** with inline editing UI
+- **Keyboard shortcut customization** with real-time key detection
+- **Settings stored** in `{userData}/config.json`
 
 ---
 
@@ -104,7 +146,6 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 
 ### 📋 Smart Formatting Profiles & Optional Live Preview
 **Status**: Planned - Phase 2
-**Implementation Timeline**: Week 2
 
 **Formatting Profiles:**
 - 5 built-in profiles:
@@ -132,22 +173,15 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 - **Smart profile suggestions**: Detect keywords → suggest appropriate profile
 
 **Technical Details:**
-- Store profiles in database
+- Store profiles in database (formatting_profiles table already exists)
 - Extend TextFormatter service
 - Config preference for preview enable/disable
 - Response format: JSON with formatted text + suggested tags
-
-**Test Coverage Required:**
-- Profile switching
-- Preview modal interactions
-- Bypass functionality
-- Tag suggestion accuracy
 
 ---
 
 ### 📋 Flexible Paste Modes & Quick Actions
 **Status**: Planned - Phase 3
-**Implementation Timeline**: Week 3
 
 **Paste Modes:**
 1. **Paste Immediately**: Current behavior, auto-paste to active app
@@ -165,25 +199,12 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 - **Paste verification**: Check clipboard after paste to confirm success
 - **Failure fallback**: If paste fails, notify user + keep in clipboard
 - **Toast notifications** for all actions (top-right, auto-dismiss)
-- **Paste history** (last 10 pastes)
-
-**Technical Details:**
-- Extend PasteService with modes
-- Create NotificationService for toasts
-- Store paste history in database
-- Settings UI for default paste mode and delay
-
-**Test Coverage Required:**
-- All paste modes
-- Quick action shortcuts
-- Paste verification
-- Notification display
+- **Paste history** (last 10 pastes, paste_history table already exists)
 
 ---
 
 ### 📋 Intelligent Tagging & Auto-Organization
 **Status**: Planned - Phase 3
-**Implementation Timeline**: Week 3
 
 **Manual Tagging:**
 - **Tag input** in live preview modal
@@ -194,11 +215,6 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Hybrid Auto-Tagging:**
 - **AI suggests 2-5 tags** based on content (GPT-4o-mini)
 - **Suggestions appear as "pills"** in live preview
-- **User actions**:
-  - Accept all (click checkmark)
-  - Accept individual tags (click pill)
-  - Reject all (click X)
-  - Add custom tags (type in input)
 - **Only runs when live preview is shown** (no extra cost if bypassed)
 
 **Tag Browser:**
@@ -208,37 +224,23 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 - **Tag analytics**: Most used, recently used, trending
 
 **Search Integration:**
-- **Filter by tags**: `tag:meeting` or `#meeting`
+- **Filter by tags**: `tag:meeting` or `#meeting` (already supported in search syntax)
 - **Combine with text search**: `budget tag:meeting`
 - **Multiple tags**: `tag:meeting tag:urgent` (AND logic)
 
 **Technical Details:**
-- Tags table with use_count
-- Note-tag junction table
+- Tags table with use_count (already in schema)
+- Note-tag junction table (already in schema)
 - TagService for CRUD operations
 - Extend formatter to return suggested tags
 - Tag autocomplete with fuzzy matching
 
-**Test Coverage Required:**
-- Tag creation and association
-- Auto-tagging accuracy
-- Tag search filters
-- Tag management operations
-
 ---
 
 ### 📋 Pause/Resume Recording & Silence Detection
-**Status**: Planned - Phase 4
-**Implementation Timeline**: Week 4
+**Status**: Planned - Phase 4 (pause/resume UI already implemented)
 
-**Pause/Resume:**
-- **Click record button again to pause** (or dedicated pause icon)
-- **Overlay changes state**: Red (recording) → Yellow (paused)
-- **Resume by clicking again**
-- **Audio recording continues seamlessly** (single file)
-- **Keyboard shortcut**: Space bar toggles pause/resume (when app focused)
-
-**Auto-Stop on Silence:**
+**Silence Detection (Not yet implemented):**
 - **Configurable threshold** in settings (3s, 5s, 10s, never)
 - **Visual countdown** in overlay: "Stopping in 3... 2... 1..."
 - **Cancel countdown** by speaking or clicking overlay
@@ -247,75 +249,6 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Silence Warning:**
 - **Modal if entire recording was silent**: "No speech detected. Recording may be empty."
 - **Options**: "Transcribe Anyway" or "Discard"
-
-**Technical Details:**
-- RecordingState type: 'idle' | 'recording' | 'paused' | 'processing'
-- Silence detection using audio analyzer
-- Overlay countdown display
-- Settings for silence threshold
-
-**Test Coverage Required:**
-- Pause/resume seamless operation
-- Silence detection accuracy
-- Countdown functionality
-- Empty recording handling
-
----
-
-### 📋 Search UI Components
-**Status**: Planned - Phase 2
-**Implementation Timeline**: Week 1 (Phase 2)
-
-**SearchBar Component:**
-- **Live search** with debounced input (300ms)
-- **Search-as-you-type** with instant results
-- **Keyboard shortcuts**: `Cmd+F` to focus search
-- **Clear button** to reset search
-- **Filter indicators** showing active filters
-
-**NoteList Component:**
-- **Virtual scrolling** for performance (react-window)
-- **Displays last 20 by default** (or search results)
-- **Each note shows**:
-  - Timestamp (relative: "2 minutes ago" or absolute)
-  - Formatted text preview (truncated)
-  - Tags (if any)
-  - Favorite indicator
-- **Click to open detail modal**
-- **Hover actions**: Re-paste, favorite, delete
-
-**NoteDetail Modal:**
-- **Full note display** with:
-  - Raw text (expandable)
-  - Formatted text
-  - Timestamp
-  - Tags (editable)
-  - Favorite toggle
-- **Actions**:
-  - Re-paste to active app
-  - Copy to clipboard
-  - Export (JSON/Markdown/TXT)
-  - Delete (with confirmation)
-  - Edit formatted text
-- **Keyboard navigation**: Arrow keys for prev/next note
-
-**FilterPanel Component:**
-- **Date range picker**
-- **Favorites filter toggle**
-- **Tag filter** (select from existing tags)
-- **Clear all filters** button
-
-**Technical Details:**
-- Integrate with existing SearchService
-- Use dbSearch IPC method
-- Virtual scrolling for 10,000+ notes
-- Keyboard accessibility
-
-**Test Coverage Required:**
-- Search input debouncing
-- Virtual scrolling performance
-- Filter application
-- Keyboard navigation
 
 ---
 
@@ -328,25 +261,10 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 - Format multi-person conversations
 - Speaker color-coding
 
-**Sentiment Analysis:**
-- Detect tone/emotion in speech
-- Visual indicators for mood
-- Filter by sentiment
-
 **Key Points Extraction:**
 - Auto-highlight main ideas
 - Summary generation for long transcriptions
 - TL;DR mode
-
-**Q&A Mode:**
-- Ask questions about transcriptions
-- Search across all notes with AI understanding
-- Contextual answers
-
-**Meeting Minutes:**
-- Auto-generate structured meeting notes
-- Identify action items and owners
-- Extract deadlines and commitments
 
 **Custom AI Instructions:**
 - User-defined prompts for formatting
@@ -363,34 +281,11 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 - "Create calendar event"
 - "Add to TODO list"
 
-**App-Specific Behavior:**
-- Different actions based on active application
-- Custom formatting per app
-- Integration detection
-
-**Webhooks/API:**
-- Send transcriptions to custom endpoints
-- Zapier integration
-- REST API for external access
-
 **Direct Integrations:**
 - **Obsidian**: Create notes directly
 - **Notion**: Add to databases
-- **Roam Research**: Daily notes integration
 - **Slack/Discord**: Post to channels
-- **Email clients**: Draft emails
 - **Calendar apps**: Create events
-
-**Auto-Tagging by Content:**
-- AI-generated tags based on content analysis
-- Smart categorization
-- Topic detection
-
-**Action Item Detection:**
-- Parse and extract TODOs
-- Identify deadlines
-- Extract names and assignments
-- Create tasks in external systems
 
 ---
 
@@ -399,43 +294,22 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Themes:**
 - Light mode
 - Multiple color schemes
-- Custom theme creation
 - High contrast mode
 
-**Customizable Layout:**
-- Resizable panels
-- Hide/show sections
-- Custom sidebar width
-- Remember layout preferences
-
 **Real-Time Transcription Preview:**
-- See words appear as you speak (streaming)
+- See words appear as you speak (partially implemented via Deepgram interim results)
 - Live correction suggestions
-- Confidence indicators during recording
 
 **Mini Mode:**
 - Compact floating window
 - Always-on-top option
 - Minimal interface for focus
 
-**Keyboard Shortcuts:**
-- Full keyboard navigation
-- Customizable shortcut mapping
-- Chord support (e.g., `Cmd+K, Cmd+S`)
-- Shortcut cheat sheet (?)
-
 **Accessibility:**
 - Screen reader support (ARIA labels)
 - Keyboard-only operation
 - Font size controls
 - Reduced motion option
-- Focus indicators
-
-**Tutorial/Onboarding:**
-- First-run guide
-- Interactive tutorial
-- Tooltips for new features
-- Getting started checklist
 
 ---
 
@@ -444,23 +318,10 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Multi-Audio Sources:**
 - Select different input devices
 - System audio capture
-- Multiple microphone support
-- Audio mixing
 
 **Background Noise Detection:**
 - Warn when ambient noise is too high
-- Suggest quieter environment
 - Noise gate configuration
-
-**Recording Timer:**
-- Show elapsed time during recording
-- Set max duration limits
-- Time-based auto-save
-
-**Audio Quality Presets:**
-- Balance quality vs file size
-- Bandwidth optimization
-- Low/Medium/High quality options
 
 **Batch File Processing:**
 - Drag-drop multiple files at once
@@ -474,38 +335,10 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Cloud Sync:**
 - Sync history across devices
 - End-to-end encryption
-- Conflict resolution
-- Selective sync
 
 **Share Links:**
 - Generate shareable links to transcriptions
 - Password protection
-- Expiration dates
-- View tracking
-
-**Collaborative Editing:**
-- Multiple users editing same transcription
-- Real-time synchronization
-- Presence indicators
-- Change tracking
-
-**Comments/Annotations:**
-- Add notes to specific parts
-- Thread discussions
-- @mentions
-- Resolve comments
-
-**Version History:**
-- Track changes over time
-- Restore previous versions
-- Compare versions
-- Blame/attribution
-
-**Team Workspaces:**
-- Shared folders for teams
-- Permission management
-- Team templates
-- Usage analytics
 
 ---
 
@@ -514,60 +347,11 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Usage Statistics:**
 - Words transcribed per day/week/month
 - Time saved vs manual typing
-- Most used features
-- Recording duration trends
-
-**Speaking Analytics:**
-- Speaking pace (words per minute)
-- Filler word frequency
-- Vocabulary diversity
-- Speaking time distribution
 
 **Cost Dashboard:**
 - Track API spending
 - Budget alerts
 - Cost per transcription
-- Usage forecasts
-
-**Productivity Metrics:**
-- Daily/weekly transcription trends
-- Peak productivity hours
-- Most productive days
-- Goal tracking
-
-**Word Clouds:**
-- Visual representation of frequent topics
-- Tag frequency visualization
-- Trend analysis
-- Topic evolution over time
-
----
-
-### 💡 Mobile & Cross-Platform
-
-**Mobile Companion App:**
-- iOS app for on-the-go recording
-- Android app support
-- Mobile-optimized UI
-- Offline recording with later sync
-
-**Browser Extension:**
-- Transcribe in web browsers
-- Capture from any webpage
-- Integration with web apps
-- YouTube/video transcription
-
-**Watch Integration:**
-- Start/stop recording from smartwatch
-- Quick voice notes
-- Complications/widgets
-- Haptic feedback
-
-**Cloud Backend:**
-- Central processing server
-- Sync across all devices
-- Web dashboard
-- API access
 
 ---
 
@@ -578,13 +362,14 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 - **Search**: Results in <100ms
 - **Insert**: 100 records in <5 seconds
 - **Concurrent operations**: Safe multi-threaded access
+- **Virtual scrolling**: 60fps rendering for large note lists
+- **Deepgram streaming**: <300ms latency for interim results
 
 ### 📋 Planned Improvements
 - **Offline Mode**: Local speech recognition fallback (Web Speech API or local Whisper)
 - **Retry Logic**: Auto-retry failed API calls
 - **Rate Limiting**: Queue requests when hitting API limits
 - **Cost Tracking**: Monitor API usage and costs
-- **Background Processing**: Continue working while transcription happens
 
 ---
 
@@ -592,9 +377,10 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 
 ### ✅ Current Security
 - **Local storage**: Transcriptions stored locally, never in cloud
-- **API keys**: Stored in local config file (~/.config/[app]/config.json)
+- **API keys**: Stored in local config file (`{userData}/config.json`)
+- **Context isolation**: Electron preload bridge with no `nodeIntegration`
 - **No tracking**: No analytics or telemetry
-- **Audio**: Never cached locally (except for batch processing)
+- **Audio**: Streamed to Deepgram in real-time, not cached locally
 
 ### 📋 Planned Security
 - **Database encryption**: SQLCipher for at-rest encryption
@@ -610,106 +396,63 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 - **Framework**: Electron 27.0.0
 - **Frontend**: React 18.2.0 + TypeScript 5.3.3
 - **Build Tool**: Vite 5.0.8
-- **Database**: SQLite (better-sqlite3) with FTS5
-- **AI Services**: OpenAI (Whisper + GPT-4o-mini)
+- **Database**: SQLite (better-sqlite3 12.5.0) with FTS5, schema v2
+- **Streaming Transcription**: Deepgram Nova-3 via WebSocket (ws 8.19.0)
+- **Batch Transcription**: OpenAI Whisper
+- **AI Formatting**: GPT-4o-mini (OpenAI 4.28.0)
 - **Global Shortcuts**: uiohook-napi 1.5.4
+- **Keyboard Simulation**: @nut-tree-fork/nut-js 4.2.6
+- **UI Components**: Radix UI (checkbox, dialog, switch, tabs, tooltip, scroll-area, label)
+- **Virtual Scrolling**: react-window 1.8.11
 - **Testing**: Jest + ts-jest
 
-### Planned Additions
-- **UI Library**: React Window (virtual scrolling)
-- **State Management**: Context API (no Redux needed for now)
-- **Notifications**: Electron Notification API + in-app toasts
-- **Optional**: SQLCipher for encryption
+### Database Schema (v2)
+- `transcriptions` — Main notes (raw_text, formatted_text, timestamp, formatting_profile, is_favorite)
+- `transcriptions_fts` — Full-text search index (FTS5)
+- `tags` — Custom tags (name, color, use_count)
+- `note_tags` — N:N junction table
+- `formatting_profiles` — Custom formatting styles
+- `paste_history` — Track when notes were pasted
+- `dictionary_entries` — Custom phrase replacements
+- `schema_version` — Migration tracking
 
 ---
 
 ## Success Metrics
 
-### Phase 1 (Current - Complete)
+### Phase 1 (Complete)
 ✅ All transcriptions persisted to database
 ✅ Search returns results in <100ms for 10,000+ notes
 ✅ Database queries optimized (indexed, FTS5)
 ✅ Build compiles without errors
-✅ 70 tests passing with good coverage
+✅ ~131 tests passing
 
-### Phase 2 (Search UI + Formatting)
+### Deepgram Integration (Complete)
+✅ Real-time streaming transcription with <300ms latency
+✅ Interim + final results displayed in UI
+✅ Live paste during recording session
+✅ Graceful session management
+
+### Dictionary & Paste (Complete)
+✅ Custom phrase replacements with full CRUD
+✅ Paste mode prevents modifier key corruption
+✅ Windows EXE packaging works with native modules
+✅ Serialized paste queue prevents race conditions
+
+### Phase 2 (Planned)
 - [ ] 5 formatting profiles working with distinct outputs
 - [ ] Live preview optional (can be bypassed)
-- [ ] Search UI responsive with virtual scrolling (10,000+ items)
 - [ ] All keyboard shortcuts functional
 
-### Phase 3 (Workflow + Tags)
+### Phase 3 (Planned)
 - [ ] Tags applied with 80%+ relevance (auto-tagging)
 - [ ] Paste modes all functional
-- [ ] Quick actions working
 - [ ] Toast notifications for all feedback
 
-### Phase 4 (Recording + Polish)
-- [ ] Pause/resume works seamlessly (single audio file)
+### Phase 4 (Planned)
 - [ ] Silence detection prevents empty recordings
 - [ ] Accessibility: Screen reader support, keyboard nav
 - [ ] Export 1,000 notes in <5s
-
----
-
-## Development Roadmap
-
-### ✅ Phase 1: Foundation (Week 1) - **COMPLETE**
-- [x] Install better-sqlite3 dependency
-- [x] Create DatabaseService with schema and migrations
-- [x] Create SearchService with FTS5 full-text search
-- [x] Update save/load logic to use database
-- [x] Integrate into main process with IPC handlers
-- [x] Update preload.ts to expose database API
-- [x] Update App.tsx to use database
-- [x] Create comprehensive test suite (70 tests)
-- [x] Verify all tests pass
-
-### 📋 Phase 2: Smart Formatting (Week 2)
-- [ ] Design 5 built-in profile prompts
-- [ ] Implement profile system in TextFormatter
-- [ ] Create ProfileSelector UI component
-- [ ] Create LivePreview component with edit capability
-- [ ] Add paste mode options
-- [ ] Keyboard shortcuts (Enter, Esc, Cmd+E)
-- [ ] Setting to enable/disable preview
-- [ ] Tag extraction integration
-- [ ] Test profile switching and accuracy
-
-### 📋 Phase 3: Workflow Flexibility (Week 3)
-- [ ] Extend PasteService with modes
-- [ ] Add configurable paste delay setting
-- [ ] Implement paste verification
-- [ ] Create settings UI for paste defaults
-- [ ] Keyboard shortcuts (Cmd+Shift+C/R/S)
-- [ ] Implement paste history (last 10)
-- [ ] Build Toast notification system
-- [ ] Create tag schema and TagService
-- [ ] Manual tagging UI with autocomplete
-- [ ] Tag browser and management UI
-- [ ] Hybrid suggestion system
-
-### 📋 Phase 4: Recording Enhancements (Week 4)
-- [ ] Implement pause/resume recording logic
-- [ ] Update overlay for paused state
-- [ ] Keyboard shortcut for toggle
-- [ ] Add silence detection with configurable threshold
-- [ ] Create countdown timer in overlay
-- [ ] Settings UI for silence threshold
-- [ ] Performance audit (10,000+ notes)
-- [ ] Accessibility review
-- [ ] Error handling polish
-- [ ] Documentation and guides
-
----
-
-## Notes
-
-- **Philosophy**: Each feature must be deeply polished before moving to the next
-- **Testing**: Every new feature gets comprehensive test coverage
-- **UX First**: Features should feel native and intuitive
-- **Performance**: App should remain fast with 10,000+ transcriptions
-- **Backwards Compatible**: Updates shouldn't break existing functionality
 
 ---
 
@@ -724,5 +467,5 @@ When adding new features:
 
 ---
 
-**Last Updated**: 2025-11-30
-**Current Version**: 1.0.0 (Phase 1 Complete)
+**Last Updated**: 2026-03-25
+**Current Version**: 1.0.0

@@ -1,11 +1,11 @@
 # Speech-to-Text Desktop App
 
-A powerful, polished note-taking companion that transforms speech into searchable, organized, and beautifully formatted text using AI.
+A powerful, polished note-taking companion that transforms speech into searchable, organized, and beautifully formatted text using AI — with real-time streaming transcription.
 
-**Status**: ✅ Phase 1 Complete (Persistent Storage & Search)
+**Status**: ✅ Core Features Complete (Recording, Streaming Transcription, Search, Dictionary)
 
-[![Tests](https://img.shields.io/badge/tests-70%20passing-brightgreen)]()
-[![Coverage](https://img.shields.io/badge/coverage-75%25-green)]()
+[![Tests](https://img.shields.io/badge/tests-131%20passing-brightgreen)]()
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
 
 ---
 
@@ -15,50 +15,59 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 
 - **🎤 Multiple Recording Modes**
   - Toggle mode: Click button to start/stop
-  - Push-to-Talk: Hold button while speaking
+  - Push-to-Talk: Hold shortcut while speaking (with paste mode to prevent key state corruption)
   - File upload: Transcribe existing audio files (mp3, wav, flac, ogg, aac, m4a)
-  - Visual waveform overlay during recording
+  - Pause/resume during recording
+  - Visual waveform overlay with stop/pause controls
 
-- **🤖 AI-Powered Transcription & Formatting**
-  - OpenAI Whisper API for high-accuracy transcription
-  - GPT-4o-mini for intelligent formatting
-  - Automatic punctuation and capitalization
-  - Paragraph breaks and structure
-  - Filler word removal
+- **🤖 Dual Transcription Engines**
+  - **Deepgram Nova-3** (primary): Real-time streaming transcription via WebSocket with interim results, smart formatting, and 300ms endpointing
+  - **OpenAI Whisper** (fallback): Batch transcription for file uploads
+  - **GPT-4o-mini** for intelligent formatting with mathematical notation support (Unicode symbols, Greek letters, superscripts)
+  - Automatic punctuation, capitalization, paragraph breaks, and filler word removal
+
+- **📖 Custom Dictionary**
+  - Define custom phrase replacements (e.g., "gonna" → "going to")
+  - Case-sensitive or case-insensitive matching
+  - Enable/disable individual entries without deleting
+  - Applied automatically after formatting
 
 - **⚡ Global Shortcuts**
   - Customizable keyboard shortcuts (works even when app isn't focused)
   - Default: `Command+Shift+Space` (macOS) or `Ctrl+Shift+Space` (Windows/Linux)
-  - Visual shortcut recorder with warnings for common keys
+  - Separate toggle and hold-to-record shortcuts
+  - Visual shortcut recorder with modifier key detection and conflict warnings
+  - Paste mode prevents modifier key corruption during push-to-talk
 
 - **💾 Persistent Storage & Full-Text Search**
-  - SQLite database with FTS5 search
+  - SQLite database with FTS5 full-text search
   - All transcriptions saved automatically
   - Instant search across all notes (<100ms)
+  - Advanced query syntax: `tag:work`, `#meeting`, `fav:true`, `date:today`
   - Filter by favorites, date range, tags
   - Export to JSON, Markdown, or plain text
   - Auto-backup on app exit
 
 - **📋 Workflow Automation**
   - Auto-paste formatted text to any application
-  - Recent transcriptions history (last 20)
+  - Native keyboard simulation via nut-js (Windows) or AppleScript (macOS)
+  - Recent transcriptions history with virtual scrolling
   - Background operation with system tray
-  - Cross-platform paste support
+  - Cross-platform paste support with serialized paste queue
 
 - **🎨 Visual Feedback**
-  - Real-time audio waveform visualization
-  - Status indicators (Ready, Listening, Thinking, Formatting, Pasting, Done)
-  - Ripple animations and color-coded states
-  - Dark theme with modern UI
+  - Real-time audio waveform visualization (12-bar display)
+  - Always-on-top overlay with click-through design
+  - Status indicators (Ready, Starting, Recording, Paused, Processing)
+  - Color-coded waveform bars (green → yellow → red by intensity)
+  - Dark theme with modern UI using Radix UI components
 
 ### 📋 Planned Features
 
 See [FEATURES.md](FEATURES.md) for the complete feature roadmap including:
 - Smart formatting profiles (5 built-in styles)
 - Optional live preview with inline editing
-- Flexible paste modes (immediate, clipboard-only, save-only)
 - Intelligent tagging with AI suggestions
-- Pause/resume recording
 - Silence detection with auto-stop
 - And much more...
 
@@ -70,13 +79,15 @@ See [FEATURES.md](FEATURES.md) for the complete feature roadmap including:
 
 - **Node.js 16+** and npm
 - **Operating System**: macOS, Windows, or Linux
-- **OpenAI API key** ([Get one here](https://platform.openai.com/api-keys))
+- **API Keys**:
+  - **Deepgram API key** (for real-time streaming transcription) — [Get one here](https://console.deepgram.com/)
+  - **OpenAI API key** (for formatting + fallback transcription) — [Get one here](https://platform.openai.com/api-keys)
 
 ### Installation
 
 ```bash
 # 1. Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/pranshur28/speech-to-text-app.git
 cd speech-to-text-app
 
 # 2. Install dependencies
@@ -90,11 +101,11 @@ cp .env.example .env
 ### Running the App
 
 ```bash
-# Development mode (with hot reload)
-npm run dev
+# Development mode (with Electron hot reload)
+npm run dev:electron
 
-# Production mode
-npm start
+# Development mode (Vite dev server only, for React work)
+npm run dev
 
 # Build for distribution
 npm run dist
@@ -106,8 +117,8 @@ npm run dist
 
 ### First-Time Setup
 
-1. **Launch the app** - Run `npm start`
-2. **Configure API Key** - Click the settings icon and add your OpenAI API key
+1. **Launch the app** — Run `npm run dev:electron`
+2. **Configure API Keys** — Open the Settings tab and add your Deepgram and OpenAI API keys
 3. **Grant Permissions**:
    - **Microphone access** (for recording)
    - **Accessibility permissions** (for auto-paste on macOS)
@@ -115,28 +126,37 @@ npm run dist
 ### Recording & Transcription
 
 **Method 1: Toggle Mode (Default)**
-1. Click the record button (or press `Cmd+Shift+Space`)
-2. Speak naturally
-3. Click again to stop (or press `Cmd+Shift+Space` again)
-4. Text is automatically formatted and pasted
+1. Press `Ctrl+Shift+Space` (or `Cmd+Shift+Space` on macOS)
+2. Speak naturally — you'll see real-time interim transcription via Deepgram
+3. Press the shortcut again to stop
+4. Text is formatted by GPT-4o-mini and pasted to the active window
 
 **Method 2: Push-to-Talk Mode**
-1. Enable "Push to Talk" in settings
-2. Hold the record button (or custom shortcut) while speaking
+1. Configure a hold shortcut in Settings
+2. Hold the shortcut while speaking
 3. Release to stop and process
 4. Text is automatically formatted and pasted
 
 **Method 3: File Upload**
 1. Click the file upload button
 2. Select an audio file
-3. Wait for transcription and formatting
+3. Wait for transcription (via Whisper) and formatting
 4. Text is automatically pasted
 
 ### Searching Your Notes
 
-- All transcriptions are automatically saved to a local database
-- View recent transcriptions in the main window
-- Search coming in Phase 2 with advanced filters
+- Switch to the **History** tab to browse all transcriptions
+- Use the search bar with full-text search across all notes
+- Special filters: `tag:work`, `#meeting`, `fav:true`, `date:today`
+- Click any note to view details, re-paste, copy, or export
+
+### Custom Dictionary
+
+- Open the **Settings** tab and scroll to the Dictionary section
+- Add phrase replacements (e.g., spoken "gonna" → replaced with "going to")
+- Toggle case sensitivity per entry
+- Enable/disable entries without deleting them
+- Replacements are applied automatically after AI formatting
 
 ---
 
@@ -144,12 +164,13 @@ npm run dist
 
 ### Settings Panel
 
-Access via the settings icon (⚙️) in the top-right corner:
+Access via the **Settings** tab:
 
-- **OpenAI API Key**: Required for transcription and formatting
-- **Toggle Shortcut**: Customize the keyboard shortcut (default: `Cmd+Shift+Space`)
-- **Hold Shortcut**: Optional single-key shortcut for push-to-talk
-- **Push to Talk Mode**: Toggle between click and hold-to-record
+- **OpenAI API Key**: Required for formatting and Whisper fallback transcription
+- **Deepgram API Key**: Required for real-time streaming transcription
+- **Toggle Shortcut**: Customize the toggle recording shortcut (default: `Ctrl+Shift+Space`)
+- **Hold Shortcut**: Customize the push-to-talk shortcut
+- **Custom Dictionary**: Manage phrase replacements
 
 ### Keyboard Shortcuts
 
@@ -163,7 +184,7 @@ Access via the settings icon (⚙️) in the top-right corner:
 
 ## Testing
 
-Comprehensive test suite with **70 tests** covering:
+Comprehensive test suite with **~131 tests** covering:
 
 ```bash
 # Run all tests
@@ -177,9 +198,10 @@ npm run test:coverage
 ```
 
 **Test Coverage:**
-- ✅ DatabaseService: 75% coverage (32 tests)
-- ✅ SearchService: 94% coverage (21 tests)
-- ✅ Integration tests: Complete workflow coverage (17 tests)
+- ✅ DatabaseService: CRUD, search, export, backup/restore
+- ✅ SearchService: Query parsing, filtering, pagination
+- ✅ Integration tests: Complete workflow coverage
+- ✅ UI Components: SearchBar, NoteCard, NoteList rendering
 
 ---
 
@@ -187,13 +209,15 @@ npm run test:coverage
 
 ### What's Stored Locally
 - ✅ Transcriptions (in local SQLite database)
-- ✅ API key (in `~/.config/[app]/config.json`)
+- ✅ API keys (in `{userData}/config.json`)
+- ✅ Custom dictionary entries (in SQLite database)
 - ✅ Settings (in localStorage and config)
 - ✅ Database backups (`.bak` file created on exit)
 
-### What's Sent to OpenAI
-- ⚠️ Audio recordings (for Whisper transcription)
-- ⚠️ Transcribed text (for GPT-4o-mini formatting)
+### What's Sent Externally
+- ⚠️ Audio stream (to Deepgram for real-time transcription)
+- ⚠️ Audio recordings (to OpenAI Whisper for file transcription)
+- ⚠️ Transcribed text (to OpenAI GPT-4o-mini for formatting)
 
 ### What's NOT Collected
 - ❌ No telemetry or analytics
@@ -203,9 +227,9 @@ npm run test:coverage
 
 ### Security Features
 - Local-only storage (never leaves your computer except for API calls)
+- Electron context isolation with secure preload bridge (no `nodeIntegration`)
 - API key validation before saving
 - Database auto-backup on exit
-- Optional database encryption (planned for Phase 2)
 
 ---
 
@@ -244,15 +268,15 @@ System Preferences → Security & Privacy → Accessibility
 
 ### API Key Errors
 
-- ✅ Verify your key starts with `sk-`
+- ✅ Verify your OpenAI key starts with `sk-`
 - ✅ Check you have sufficient API credits at [OpenAI Platform](https://platform.openai.com/account/usage)
-- ✅ Ensure the key has access to Whisper and GPT-4o-mini models
-- ✅ Try re-entering the key in Settings
+- ✅ Verify your Deepgram key at [Deepgram Console](https://console.deepgram.com/)
+- ✅ Try re-entering the keys in Settings
 
 ### Database Issues
 
-- Database is stored at: `~/.config/[app]/data/transcriptions.db`
-- Backup file: `~/.config/[app]/data/transcriptions.db.bak`
+- Database is stored at: `{userData}/data/transcriptions.db`
+- Backup file: `{userData}/data/transcriptions.db.bak`
 - If corrupted, delete the `.db` file and restart (backup will be used)
 
 ### Empty Transcriptions
@@ -271,24 +295,51 @@ System Preferences → Security & Privacy → Accessibility
 ```
 speech-to-text-app/
 ├── src/
-│   ├── main.ts                 # Electron main process
-│   ├── preload.ts             # IPC bridge
-│   ├── renderer/              # React UI
-│   │   ├── App.tsx           # Main component
-│   │   ├── Overlay.tsx       # Waveform overlay
-│   │   └── styles.css        # Styling
-│   ├── services/             # Business logic
-│   │   ├── database.ts       # SQLite + FTS5
-│   │   ├── search.ts         # Search service
-│   │   ├── transcription.ts  # Whisper API
-│   │   ├── formatter.ts      # GPT-4o-mini formatting
-│   │   ├── paste.ts          # Cross-platform paste
-│   │   └── config.ts         # Config management
-│   └── __tests__/            # Test files
-├── FEATURES.md               # Complete feature documentation
-├── jest.config.js            # Jest configuration
-├── package.json              # Dependencies
-└── README.md                 # This file
+│   ├── main.ts                          # Electron main process
+│   ├── preload.ts                       # Secure IPC bridge
+│   ├── renderer/                        # React UI
+│   │   ├── App.tsx                      # Main component with tab navigation
+│   │   ├── Overlay.tsx                  # Floating waveform overlay
+│   │   ├── styles.css                   # Main styling
+│   │   ├── overlay.css                  # Overlay styling
+│   │   └── components/
+│   │       ├── SearchBar.tsx            # Debounced search with filter syntax
+│   │       ├── NoteList.tsx             # Virtualized note list (react-window)
+│   │       ├── NoteCard.tsx             # Individual transcription card
+│   │       ├── NoteDetailModal.tsx      # Full note view modal
+│   │       ├── FilterPanel.tsx          # Date/favorite/tag filters
+│   │       ├── DictionarySettings.tsx   # Custom phrase replacement UI
+│   │       ├── PersistentHeader.tsx     # Recording status header
+│   │       ├── TabBar.tsx               # Tab navigation
+│   │       ├── ContextualFooter.tsx     # Action buttons
+│   │       └── ErrorBoundary.tsx        # React error boundary
+│   ├── services/                        # Business logic
+│   │   ├── deepgram.ts                  # Deepgram WebSocket streaming
+│   │   ├── transcription.ts             # OpenAI Whisper API
+│   │   ├── formatter.ts                 # GPT-4o-mini formatting
+│   │   ├── paste.ts                     # Cross-platform paste with modifier awareness
+│   │   ├── dictionary.ts               # Custom phrase replacements
+│   │   ├── database.ts                  # SQLite + FTS5
+│   │   ├── search.ts                    # Search service with query parsing
+│   │   └── config.ts                    # Config management
+│   ├── shortcuts/
+│   │   └── shortcut-manager.ts          # Global keyboard hooks with paste mode
+│   ├── ipc/                             # IPC handler modules
+│   │   ├── api-keys.ts                  # API key validation
+│   │   ├── audio-transcription.ts       # Transcribe/format/type operations
+│   │   ├── deepgram.ts                  # Streaming transcription handlers
+│   │   ├── dictionary.ts               # Dictionary CRUD handlers
+│   │   ├── database.ts                  # Database query handlers
+│   │   ├── overlay.ts                   # Overlay window control
+│   │   └── shortcuts.ts                # Shortcut management
+│   └── __tests__/                       # Test files
+├── FEATURES.md                          # Complete feature documentation
+├── PROGRESS.md                          # Implementation progress tracker
+├── QUICKSTART.md                        # Quick start guide
+├── electron-builder.yml                 # Electron builder config
+├── jest.config.js                       # Jest configuration
+├── package.json                         # Dependencies
+└── README.md                            # This file
 ```
 
 ### Tech Stack
@@ -300,18 +351,24 @@ speech-to-text-app/
 | **TypeScript 5.3** | Type-safe JavaScript |
 | **Vite 5** | Fast build tool |
 | **SQLite** (better-sqlite3) | Local database with FTS5 |
-| **OpenAI API** | Whisper + GPT-4o-mini |
+| **Deepgram Nova-3** | Real-time streaming transcription |
+| **OpenAI API** | Whisper transcription + GPT-4o-mini formatting |
 | **uiohook-napi** | Global keyboard shortcuts |
+| **@nut-tree-fork/nut-js** | Native keyboard simulation (Windows) |
+| **ws** | WebSocket client for Deepgram |
+| **Radix UI** | Accessible UI primitives |
+| **react-window** | Virtualized list rendering |
+| **date-fns** | Date utilities |
+| **electron-log** | Logging |
 | **Jest** | Testing framework |
 
 ### Scripts
 
 ```bash
 # Development
-npm run dev              # Start dev server with hot reload
-npm run build:main       # Build main process
-npm run build:renderer   # Build renderer process
-npm run build           # Build both
+npm run dev              # Start Vite dev server + TypeScript watch
+npm run dev:electron     # Start with Electron auto-reload
+npm run build           # TypeScript compile + Vite build
 
 # Testing
 npm test                # Run all tests
@@ -319,18 +376,8 @@ npm run test:watch      # Run tests in watch mode
 npm run test:coverage   # Generate coverage report
 
 # Production
-npm start               # Start the app
 npm run dist            # Build distributable packages
 ```
-
-### Adding New Features
-
-1. Read [FEATURES.md](FEATURES.md) for planned features
-2. Create tests first (TDD approach)
-3. Implement the feature
-4. Ensure all tests pass (`npm test`)
-5. Update documentation
-6. Update [FEATURES.md](FEATURES.md) status
 
 ---
 
@@ -342,10 +389,12 @@ Create installers for your platform:
 npm run dist
 ```
 
-Output will be in the `out/` directory:
-- **macOS**: `.dmg` installer
-- **Windows**: `.exe` installer
+Output will be in the `release/` directory:
+- **macOS**: `.dmg` installer + `.zip`
+- **Windows**: NSIS `.exe` installer + portable `.exe`
 - **Linux**: `.AppImage` and `.deb` packages
+
+Native modules (better-sqlite3, uiohook-napi, nut-js) are automatically unpacked from the ASAR archive for compatibility.
 
 ---
 
@@ -354,24 +403,35 @@ Output will be in the `out/` directory:
 ### ✅ Phase 1: Foundation (Complete)
 - [x] Persistent storage with SQLite
 - [x] Full-text search with FTS5
-- [x] Comprehensive test suite (70 tests)
+- [x] Comprehensive test suite
 - [x] Database integration
 - [x] Auto-backup system
 
-### 📋 Phase 2: Smart Formatting (Week 2)
+### ✅ Deepgram Streaming Integration (Complete)
+- [x] Real-time WebSocket streaming transcription
+- [x] Interim + final result handling
+- [x] Live paste during recording
+- [x] Serialized paste queue
+
+### ✅ Dictionary & Paste Improvements (Complete)
+- [x] Custom dictionary with CRUD operations
+- [x] Paste mode to prevent key state corruption
+- [x] Native keyboard simulation (nut-js)
+- [x] Build configuration for packaged Windows EXE
+
+### 📋 Phase 2: Smart Formatting
 - [ ] 5 formatting profiles
 - [ ] Optional live preview
 - [ ] Inline text editing
 - [ ] Profile customization
 
-### 📋 Phase 3: Workflow Flexibility (Week 3)
-- [ ] Flexible paste modes
+### 📋 Phase 3: Workflow Flexibility
+- [ ] Flexible paste modes (immediate, clipboard-only, save-only)
 - [ ] Quick actions & shortcuts
-- [ ] Intelligent tagging
+- [ ] Intelligent tagging with AI suggestions
 - [ ] Tag management UI
 
-### 📋 Phase 4: Recording Enhancements (Week 4)
-- [ ] Pause/resume recording
+### 📋 Phase 4: Recording Enhancements
 - [ ] Silence detection
 - [ ] Auto-stop on silence
 - [ ] Final polish & accessibility
@@ -400,8 +460,9 @@ This project is open source and available under the **MIT License**.
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-username/speech-to-text-app/issues)
+- **Issues**: [GitHub Issues](https://github.com/pranshur28/speech-to-text-app/issues)
 - **Documentation**: [FEATURES.md](FEATURES.md)
+- **Quick Start**: [QUICKSTART.md](QUICKSTART.md)
 - **Tests**: Run `npm test` to verify functionality
 
 ---
@@ -409,10 +470,10 @@ This project is open source and available under the **MIT License**.
 ## Acknowledgments
 
 - Built with [Electron](https://www.electronjs.org/)
-- Powered by [OpenAI](https://openai.com/) (Whisper + GPT)
-- Icons and UI inspired by modern design principles
+- Powered by [Deepgram](https://deepgram.com/) (Nova-3 streaming) and [OpenAI](https://openai.com/) (Whisper + GPT)
+- UI built with [Radix UI](https://www.radix-ui.com/) primitives
 
 ---
 
-**Version**: 1.0.0 (Phase 1 Complete)
-**Last Updated**: 2025-11-30
+**Version**: 1.0.0
+**Last Updated**: 2026-03-25
