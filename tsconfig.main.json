@@ -8,5 +8,5 @@
     "allowSyntheticDefaultImports": true
   },
   "include": ["src/main.ts", "src/preload.ts", "src/services/**/*", "src/utils/**/*", "src/ipc/**/*", "src/shortcuts/**/*"],
-  "exclude": ["src/renderer/**/*"]
+  "exclude": ["src/renderer/**/*", "src/**/__tests__/**/*", "src/**/*.test.*", "src/**/*.spec.*"]
 }
