@@ -4,6 +4,7 @@
     align-items: center;
     height: 100vh;
     width: 100vw;
+    pointer-events: auto;
 }
 
 /* Chromeless container - no background, just layout */
@@ -12,6 +13,20 @@
     align-items: center;
     gap: 16px;
     padding: 4px 0;
+    cursor: grab;
+    user-select: none;
+    transition: transform 0.1s ease-out;
+}
+
+.overlay-pill:active {
+    cursor: grabbing;
+}
+
+.overlay-pill.overlay-pill-idle {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    gap: 0;
 }
 
 .waveform-capsule {
@@ -112,4 +127,27 @@
 .overlay-btn.pause-btn.paused:hover {
     background: rgba(16, 185, 129, 0.5);
     box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+/* Idle pill styling */
+.idle-indicator {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 10, 10, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.idle-indicator svg {
+    width: 24px;
+    height: 24px;
 }
