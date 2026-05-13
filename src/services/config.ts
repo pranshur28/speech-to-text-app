@@ -8,6 +8,7 @@ interface Config {
   deepgramApiKey?: string;
   toggleShortcut?: string;
   holdShortcut?: string;
+  overlayPosition?: { x: number; y: number };
 }
 
 export class ConfigService {
@@ -87,6 +88,15 @@ export class ConfigService {
 
   setDeepgramApiKey(key: string): void {
     this.config.deepgramApiKey = key;
+    this.save();
+  }
+
+  getOverlayPosition(): { x: number; y: number } | undefined {
+    return this.config.overlayPosition;
+  }
+
+  setOverlayPosition(x: number, y: number): void {
+    this.config.overlayPosition = { x, y };
     this.save();
   }
 }

@@ -206,6 +206,9 @@ export default function App() {
       setHoldShortcut(shortcuts.hold);
     });
 
+    // Initialize overlay to idle state
+    window.electronAPI.setOverlayState('idle');
+
     // Listen for global shortcut events from main process
     const unsubToggle = window.electronAPI.onToggleRecording(() => {
       const { phase } = stateRef.current;
@@ -255,9 +258,6 @@ export default function App() {
         setLiveTranscript(finalsTextRef.current + (finalsTextRef.current ? ' ' : '') + text);
       }
     });
-
-    // Ensure overlay is hidden on start
-    window.electronAPI.setOverlayVisible(false);
 
     // Cleanup listeners on unmount
     return () => {
@@ -423,7 +423,7 @@ export default function App() {
       // 250ms timeslice for frequent streaming chunks
       mediaRecorder.start(250);
       dispatch({ type: 'RECORDING_STARTED' });
-      window.electronAPI.setOverlayVisible(true);
+      window.electronAPI.setOverlayState('recording');
 
       if (pendingStopRef.current) {
         pendingStopRef.current = false;
@@ -457,7 +457,7 @@ export default function App() {
     dispatch({ type: 'STOP_PROCESSING' });
     setLiveTranscript('');
     finalsTextRef.current = '';
-    window.electronAPI.setOverlayVisible(false);
+    window.electronAPI.setOverlayState('idle');
 
     try {
       // Deepgram stop: finalizes transcript, formats with GPT, types text, saves to DB
@@ -500,6 +500,7 @@ export default function App() {
 
     mediaRecorderRef.current.pause();
     dispatch({ type: 'PAUSE' });
+    window.electronAPI.setOverlayState('paused');
   };
 
   const resumeRecording = () => {
@@ -507,6 +508,7 @@ export default function App() {
 
     mediaRecorderRef.current.resume();
     dispatch({ type: 'RESUME' });
+    window.electronAPI.setOverlayState('recording');
   };
 
   const cancelRecording = () => {
@@ -530,7 +532,7 @@ export default function App() {
     dispatch({ type: 'CANCEL' });
     setLiveTranscript('');
     finalsTextRef.current = '';
-    window.electronAPI.setOverlayVisible(false);
+    window.electronAPI.setOverlayState('idle');
 
     setTimeout(() => dispatch({ type: 'RESET' }), 1500);
   };

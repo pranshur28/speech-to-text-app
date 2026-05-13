@@ -16,11 +16,13 @@ export interface IElectronAPI {
   getShortcuts: () => Promise<{ toggle: string; hold: string }>;
   setToggleShortcut: (shortcut: string) => Promise<{ success: boolean }>;
   setHoldShortcut: (shortcut: string) => Promise<{ success: boolean }>;
-  setOverlayVisible: (visible: boolean) => void;
+  setOverlayState: (state: 'idle' | 'recording' | 'paused') => void;
+  onOverlayState: (callback: (state: 'idle' | 'recording' | 'paused') => void) => () => void;
   sendAudioData: (data: any) => void;
   onAudioData: (callback: (data: any) => void) => () => void;
   overlayAction: (action: 'stop' | 'pause' | 'resume') => void;
-  setOverlayInteractive: (interactive: boolean) => void;
+  moveOverlayWindow: (x: number, y: number) => void;
+  saveOverlayPosition: (x: number, y: number) => void;
   getApiKeyStatus: () => Promise<{ valid: boolean; error: string | null }>;
   getApiKey: () => Promise<string>;
   saveApiKey: (apiKey: string) => Promise<{ success: boolean; error: string | null }>;
@@ -87,7 +89,12 @@ const electronAPI: IElectronAPI = {
   getShortcuts: () => ipcRenderer.invoke('get-shortcuts'),
   setToggleShortcut: (shortcut: string) => ipcRenderer.invoke('set-toggle-shortcut', shortcut),
   setHoldShortcut: (shortcut: string) => ipcRenderer.invoke('set-hold-shortcut', shortcut),
-  setOverlayVisible: (visible: boolean) => ipcRenderer.send('set-overlay-visible', visible),
+  setOverlayState: (state: 'idle' | 'recording' | 'paused') => ipcRenderer.send('set-overlay-state', state),
+  onOverlayState: (callback: (state: 'idle' | 'recording' | 'paused') => void) => {
+    const handler = (_event: any, state: 'idle' | 'recording' | 'paused') => callback(state);
+    ipcRenderer.on('overlay-state', handler);
+    return () => ipcRenderer.removeListener('overlay-state', handler);
+  },
   sendAudioData: (data: any) => ipcRenderer.send('audio-data', data),
   onAudioData: (callback: (data: any) => void) => {
     const handler = (_event: any, data: any) => callback(data);
@@ -95,7 +102,8 @@ const electronAPI: IElectronAPI = {
     return () => ipcRenderer.removeListener('audio-data', handler);
   },
   overlayAction: (action: 'stop' | 'pause' | 'resume') => ipcRenderer.send('overlay-action', action),
-  setOverlayInteractive: (interactive: boolean) => ipcRenderer.send('set-overlay-interactive', interactive),
+  moveOverlayWindow: (x: number, y: number) => ipcRenderer.send('move-overlay-window', { x, y }),
+  saveOverlayPosition: (x: number, y: number) => ipcRenderer.send('save-overlay-position', { x, y }),
   getApiKeyStatus: () => ipcRenderer.invoke('get-api-key-status'),
   getApiKey: () => ipcRenderer.invoke('get-api-key'),
   saveApiKey: (apiKey: string) => ipcRenderer.invoke('save-api-key', apiKey),

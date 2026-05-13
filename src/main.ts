@@ -107,18 +107,29 @@ const createOverlayWindow = () => {
     y: 0
   });
 
-  const { screen } = require('electron');
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
-  overlayWindow.setPosition(Math.round(width / 2 - 120), height - 80);
-
   const isDev = !app.isPackaged;
   const startUrl = isDev
     ? 'http://localhost:5173/#/overlay'
     : `file://${path.join(__dirname, '../build/index.html')}#/overlay`;
 
   overlayWindow.loadURL(startUrl);
-  overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+
+  overlayWindow.once('ready-to-show', () => {
+    if (overlayWindow) {
+      // Load saved position or compute default
+      const savedPosition = configService?.getOverlayPosition();
+      if (savedPosition) {
+        overlayWindow.setPosition(savedPosition.x, savedPosition.y);
+      } else {
+        // Compute default: center horizontally, bottom 80px
+        const { screen } = require('electron');
+        const primaryDisplay = screen.getPrimaryDisplay();
+        const { width, height } = primaryDisplay.workAreaSize;
+        overlayWindow.setPosition(Math.round(width / 2 - 120), height - 80);
+      }
+      overlayWindow.showInactive();
+    }
+  });
 
   overlayWindow.on('closed', () => {
     overlayWindow = null;
