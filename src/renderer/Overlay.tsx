@@ -23,8 +23,9 @@ export default function Overlay() {
     });
 
     const unsubscribeAudio = window.electronAPI.onAudioData((data: any) => {
-      const state = overlayStateRef.current;
-      if (data?.waveform && (state === 'recording' || state === 'paused')) {
+      // Only update waveform while actively recording; paused state keeps the
+      // last captured bars frozen at their actual heights.
+      if (data?.waveform && overlayStateRef.current === 'recording') {
         setWaveform(data.waveform.slice(0, 12));
       }
     });
@@ -35,10 +36,15 @@ export default function Overlay() {
     };
   }, []);
 
-  // In idle mode the visible pill is 48x48 inside a 240x65 window; make the
-  // transparent margins click-through so they don't swallow clicks for apps below.
+  // Resize the BrowserWindow to match the visible pill so transparent margins
+  // never exist to intercept clicks. Idle = 48x48; recording/paused = 240x65.
+  // setBounds (in the IPC handler) re-centers the window so it doesn't jump.
   useEffect(() => {
-    window.electronAPI.setOverlayClickthrough(overlayState === 'idle');
+    if (overlayState === 'idle') {
+      window.electronAPI.resizeOverlayWindow(48, 48);
+    } else {
+      window.electronAPI.resizeOverlayWindow(240, 65);
+    }
   }, [overlayState]);
 
   // isPaused is derived entirely from overlayState pushed by the main process,
@@ -85,6 +91,10 @@ export default function Overlay() {
     dragOffsetRef.current = null;
   };
 
+  const handlePointerCancel = () => {
+    dragOffsetRef.current = null;
+  };
+
   const handleStop = () => {
     window.electronAPI.overlayAction('stop');
   };
@@ -102,8 +112,7 @@ export default function Overlay() {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onMouseEnter={() => window.electronAPI.setOverlayClickthrough(false)}
-          onMouseLeave={() => window.electronAPI.setOverlayClickthrough(true)}
+          onPointerCancel={handlePointerCancel}
         >
           <div className="idle-indicator">
             {/* Microphone icon */}
@@ -125,6 +134,7 @@ export default function Overlay() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
       >
         <div className="waveform-capsule">
           {waveform.map((value, index) => {
@@ -135,12 +145,11 @@ export default function Overlay() {
               : Math.floor(centerIndex + distanceFromCenter - 1);
             const mirroredValue = waveform[Math.min(mirrorIndex, waveform.length - 1)];
 
-            const height = isPaused ? 4 : 4 + mirroredValue * 22;
-            const intensity = isPaused ? 0 : mirroredValue;
-
-            // Green → Yellow → Red based on intensity
-            const r = Math.round(intensity > 0.5 ? 255 : intensity * 2 * 255);
-            const g = Math.round(intensity < 0.5 ? 200 + intensity * 110 : (1 - intensity) * 2 * 255);
+            // Use the actual last-captured value so paused bars freeze in place
+            // rather than collapsing. The .paused CSS class desaturates the color.
+            const height = 4 + mirroredValue * 22;
+            const r = Math.round(mirroredValue > 0.5 ? 255 : mirroredValue * 2 * 255);
+            const g = Math.round(mirroredValue < 0.5 ? 200 + mirroredValue * 110 : (1 - mirroredValue) * 2 * 255);
             const color = `rgb(${r}, ${g}, 50)`;
 
             return (

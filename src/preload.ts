@@ -23,7 +23,7 @@ export interface IElectronAPI {
   overlayAction: (action: 'stop' | 'pause' | 'resume') => void;
   moveOverlayWindow: (x: number, y: number) => void;
   saveOverlayPosition: (x: number, y: number) => void;
-  setOverlayClickthrough: (ignore: boolean) => void;
+  resizeOverlayWindow: (width: number, height: number) => void;
   getApiKeyStatus: () => Promise<{ valid: boolean; error: string | null }>;
   getApiKey: () => Promise<string>;
   saveApiKey: (apiKey: string) => Promise<{ success: boolean; error: string | null }>;
@@ -105,7 +105,7 @@ const electronAPI: IElectronAPI = {
   overlayAction: (action: 'stop' | 'pause' | 'resume') => ipcRenderer.send('overlay-action', action),
   moveOverlayWindow: (x: number, y: number) => ipcRenderer.send('move-overlay-window', { x, y }),
   saveOverlayPosition: (x: number, y: number) => ipcRenderer.send('save-overlay-position', { x, y }),
-  setOverlayClickthrough: (ignore: boolean) => ipcRenderer.send('set-overlay-clickthrough', { ignore }),
+  resizeOverlayWindow: (width: number, height: number) => ipcRenderer.send('resize-overlay-window', { width, height }),
   getApiKeyStatus: () => ipcRenderer.invoke('get-api-key-status'),
   getApiKey: () => ipcRenderer.invoke('get-api-key'),
   saveApiKey: (apiKey: string) => ipcRenderer.invoke('save-api-key', apiKey),

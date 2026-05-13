@@ -47,12 +47,16 @@ export function registerOverlayHandlers(ctx: ServiceContext) {
     }
   });
 
-  ipcMain.on('set-overlay-clickthrough', (_event: IpcMainEvent, { ignore }: { ignore: boolean }) => {
+  ipcMain.on('resize-overlay-window', (_event: IpcMainEvent, { width, height }: { width: number; height: number }) => {
     const overlayWindow = ctx.getOverlayWindow();
     if (overlayWindow && !overlayWindow.isDestroyed()) {
-      // forward: true keeps mouse events flowing to the renderer so
-      // mouseenter/mouseleave on the pill can re-enable interactivity.
-      overlayWindow.setIgnoreMouseEvents(ignore, { forward: true });
+      const [x, y] = overlayWindow.getPosition();
+      const [currentW, currentH] = overlayWindow.getSize();
+      // Keep the visual center fixed so the pill doesn't jump when the window
+      // expands from idle (48x48) to recording (240x65) or vice versa.
+      const newX = Math.round(x + (currentW - width) / 2);
+      const newY = Math.round(y + (currentH - height) / 2);
+      overlayWindow.setBounds({ x: newX, y: newY, width, height });
     }
   });
 }
