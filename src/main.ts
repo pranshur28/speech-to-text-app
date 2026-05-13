@@ -116,16 +116,30 @@ const createOverlayWindow = () => {
 
   overlayWindow.once('ready-to-show', () => {
     if (overlayWindow) {
-      // Load saved position or compute default
-      const savedPosition = configService?.getOverlayPosition();
-      if (savedPosition) {
-        overlayWindow.setPosition(savedPosition.x, savedPosition.y);
+      const { screen } = require('electron');
+      const [initW, initH] = overlayWindow.getSize();
+      const savedCenter = configService?.getOverlayPosition();
+
+      if (savedCenter) {
+        // Derive top-left from saved center and the initial window size.
+        // The renderer will call resizeOverlayWindow shortly after, which
+        // re-centers from these bounds — so starting from the correct center
+        // here ensures the pill ends up exactly where the user left it.
+        const workArea = screen.getDisplayNearestPoint({
+          x: Math.round(savedCenter.centerX),
+          y: Math.round(savedCenter.centerY),
+        }).workArea;
+        const x = Math.round(savedCenter.centerX - initW / 2);
+        const y = Math.round(savedCenter.centerY - initH / 2);
+        // Clamp so the window stays fully on-screen even after monitor changes.
+        const clampedX = Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - initW));
+        const clampedY = Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - initH));
+        overlayWindow.setPosition(clampedX, clampedY);
       } else {
-        // Compute default: center horizontally, bottom 80px
-        const { screen } = require('electron');
+        // Default: center horizontally, 80px from bottom of primary display.
         const primaryDisplay = screen.getPrimaryDisplay();
         const { width, height } = primaryDisplay.workAreaSize;
-        overlayWindow.setPosition(Math.round(width / 2 - 120), height - 80);
+        overlayWindow.setPosition(Math.round(width / 2 - initW / 2), height - 80);
       }
       overlayWindow.showInactive();
     }
