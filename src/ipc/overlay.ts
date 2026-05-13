@@ -46,4 +46,13 @@ export function registerOverlayHandlers(ctx: ServiceContext) {
       configService.setOverlayPosition(x, y);
     }
   });
+
+  ipcMain.on('set-overlay-clickthrough', (_event: IpcMainEvent, { ignore }: { ignore: boolean }) => {
+    const overlayWindow = ctx.getOverlayWindow();
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
+      // forward: true keeps mouse events flowing to the renderer so
+      // mouseenter/mouseleave on the pill can re-enable interactivity.
+      overlayWindow.setIgnoreMouseEvents(ignore, { forward: true });
+    }
+  });
 }

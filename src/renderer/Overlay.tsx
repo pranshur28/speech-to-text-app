@@ -6,34 +6,26 @@ type OverlayState = 'idle' | 'recording' | 'paused';
 export default function Overlay() {
   const [overlayState, setOverlayState] = useState<OverlayState>('idle');
   const [waveform, setWaveform] = useState<number[]>(new Array(12).fill(0));
-  const [isPaused, setIsPaused] = useState(false);
-  const isPausedRef = useRef(false);
-  const dragOffsetRef = useRef<{ pointerX: number; pointerY: number; windowX: number; windowY: number } | null>(null);
+  const overlayStateRef = useRef<OverlayState>('idle');
+  // offsetX/Y: pointer's clientX/clientY at drag start = distance from window top-left to pointer
+  const dragOffsetRef = useRef<{ offsetX: number; offsetY: number } | null>(null);
 
-  // Keep pause ref in sync with state
+  // Keep ref in sync so the stable audio callback always reads current state
   useEffect(() => {
-    isPausedRef.current = isPaused;
-  }, [isPaused]);
+    overlayStateRef.current = overlayState;
+  }, [overlayState]);
 
   useEffect(() => {
-    // Make body transparent for overlay window
     document.body.style.background = 'transparent';
 
-    // Listen for overlay state changes
     const unsubscribeState = window.electronAPI.onOverlayState((state: OverlayState) => {
       setOverlayState(state);
-      // Reset pause state when transitioning out of recording
-      if (state !== 'recording' && state !== 'paused') {
-        setIsPaused(false);
-      }
     });
 
-    // Listen for audio data from main app
     const unsubscribeAudio = window.electronAPI.onAudioData((data: any) => {
-      if (data?.waveform && (overlayState === 'recording' || overlayState === 'paused')) {
-        // Take only 12 bars for a smaller display
-        const reducedWaveform = data.waveform.slice(0, 12);
-        setWaveform(reducedWaveform);
+      const state = overlayStateRef.current;
+      if (data?.waveform && (state === 'recording' || state === 'paused')) {
+        setWaveform(data.waveform.slice(0, 12));
       }
     });
 
@@ -41,44 +33,43 @@ export default function Overlay() {
       unsubscribeState();
       unsubscribeAudio();
     };
+  }, []);
+
+  // In idle mode the visible pill is 48x48 inside a 240x65 window; make the
+  // transparent margins click-through so they don't swallow clicks for apps below.
+  useEffect(() => {
+    window.electronAPI.setOverlayClickthrough(overlayState === 'idle');
   }, [overlayState]);
 
+  // isPaused is derived entirely from overlayState pushed by the main process,
+  // so it can never drift when pause/resume is triggered from outside the overlay.
+  const isPaused = overlayState === 'paused';
+
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    // Only allow dragging from the pill chrome, not from buttons
-    if ((e.target as HTMLElement).closest('.overlay-btn')) {
-      return;
-    }
+    if ((e.target as HTMLElement).closest('.overlay-btn')) return;
 
     const pill = e.currentTarget;
     pill.setPointerCapture(e.pointerId);
 
-    // Store the initial pointer position and window position
-    // The window is 240x65, and the pill is centered in it
-    // We'll calculate the window position relative to the viewport center
-    const windowWidth = 240;
-    const windowHeight = 65;
-
+    // clientX/clientY is the pointer's offset within the BrowserWindow content area,
+    // i.e. clientX === screenX - windowLeft. Storing it lets us recompute the
+    // window's top-left from screenX on every move without an async IPC round-trip.
     dragOffsetRef.current = {
-      pointerX: e.clientX,
-      pointerY: e.clientY,
-      // Approximate current window position (pill is centered)
-      windowX: e.clientX - windowWidth / 2,
-      windowY: e.clientY - windowHeight / 2,
+      offsetX: e.clientX,
+      offsetY: e.clientY,
     };
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragOffsetRef.current) return;
 
-    // Calculate how much the pointer has moved since drag start
-    const deltaX = e.clientX - dragOffsetRef.current.pointerX;
-    const deltaY = e.clientY - dragOffsetRef.current.pointerY;
+    // screenX/Y is the pointer's absolute screen position regardless of where
+    // the BrowserWindow currently sits, so subtracting the fixed offset gives
+    // the correct window top-left even as the window moves during drag.
+    const newX = e.screenX - dragOffsetRef.current.offsetX;
+    const newY = e.screenY - dragOffsetRef.current.offsetY;
 
-    // Calculate new window position
-    const newX = dragOffsetRef.current.windowX + deltaX;
-    const newY = dragOffsetRef.current.windowY + deltaY;
-
-    window.electronAPI.moveOverlayWindow(newX, newY);
+    window.electronAPI.moveOverlayWindow(Math.round(newX), Math.round(newY));
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -87,28 +78,22 @@ export default function Overlay() {
     const pill = e.currentTarget;
     pill.releasePointerCapture(e.pointerId);
 
-    // Calculate final position and persist
-    const deltaX = e.clientX - dragOffsetRef.current.pointerX;
-    const deltaY = e.clientY - dragOffsetRef.current.pointerY;
-    const finalX = dragOffsetRef.current.windowX + deltaX;
-    const finalY = dragOffsetRef.current.windowY + deltaY;
+    const finalX = e.screenX - dragOffsetRef.current.offsetX;
+    const finalY = e.screenY - dragOffsetRef.current.offsetY;
 
-    window.electronAPI.saveOverlayPosition(finalX, finalY);
+    window.electronAPI.saveOverlayPosition(Math.round(finalX), Math.round(finalY));
     dragOffsetRef.current = null;
   };
 
   const handleStop = () => {
-    console.log('[OVERLAY] Stop clicked');
     window.electronAPI.overlayAction('stop');
   };
 
+  // Derive the action from authoritative overlayState, not a local toggle.
   const handlePause = () => {
-    console.log('[OVERLAY] Pause clicked, current state:', isPaused);
-    setIsPaused(!isPaused);
-    window.electronAPI.overlayAction(isPaused ? 'resume' : 'pause');
+    window.electronAPI.overlayAction(overlayState === 'paused' ? 'resume' : 'pause');
   };
 
-  // Idle pill render
   if (overlayState === 'idle') {
     return (
       <div className="overlay-container">
@@ -117,6 +102,8 @@ export default function Overlay() {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onMouseEnter={() => window.electronAPI.setOverlayClickthrough(false)}
+          onMouseLeave={() => window.electronAPI.setOverlayClickthrough(true)}
         >
           <div className="idle-indicator">
             {/* Microphone icon */}
