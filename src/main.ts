@@ -18,6 +18,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Keep settings, history and dictionary in one place for both the dev build ("speech-to-text-app")
+// and the installed app ("Speech to Text"), which would otherwise get separate, empty folders.
+app.setPath('userData', path.join(app.getPath('appData'), 'speech-to-text-app'));
+
 // Service declarations
 let configService: ConfigService;
 let mainWindow: BrowserWindow | null = null;
