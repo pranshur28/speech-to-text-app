@@ -1,52 +1,82 @@
-import { holdBackCommandPrefix, joinWithCommands, parseTrailingCommand } from '../voice-commands';
+import { isEnterCommand, joinWithCommands, mightBeEnterCommand } from '../voice-commands';
 
-describe('parseTrailingCommand', () => {
+describe('isEnterCommand', () => {
+  test.each(['Submit.', 'submit', 'Submit!', 'Sub mit.', 'Summit.', 'Submits.'])(
+    '%p alone presses Enter',
+    (utterance) => {
+      expect(isEnterCommand(utterance, 'submit')).toBe(true);
+    }
+  );
+
   test.each([
-    ['Write the report. Press enter.', 'Write the report.'],
-    ['Okay, press enter', 'Okay'],
-    ['See you soon press enter!', 'See you soon'],
-    ['Press enter.', ''],
-    ['press Enter', ''],
-    ['Done. Press, enter.', 'Done.'],
-  ])('%p → text %p + Enter', (input, text) => {
-    expect(parseTrailingCommand(input)).toEqual({ text, command: 'enter' });
+    'Please submit the form.',
+    'Submit the report today.',
+    'Submitted.',
+    'Commit.',
+    'Okay.',
+    '',
+  ])('%p is not the command', (utterance) => {
+    expect(isEnterCommand(utterance, 'submit')).toBe(false);
   });
 
-  test.each([
-    "I'll press enter later.",
-    'Press enter to continue the setup.',
-    'The impress enter key',
-    'Just a normal sentence.',
-    'compress enter',
-  ])('%p is not a command', (input) => {
-    expect(parseTrailingCommand(input)).toEqual({ text: input, command: null });
+  test('works with a custom multi-word phrase and its common mishearings', () => {
+    expect(isEnterCommand('Press enter.', 'press enter')).toBe(true);
+    expect(isEnterCommand('Presenter.', 'press enter')).toBe(true);
+    expect(isEnterCommand('Press center.', 'press enter')).toBe(true);
+    expect(isEnterCommand('I will press enter.', 'press enter')).toBe(false);
+  });
+
+  test('short phrases must match exactly', () => {
+    expect(isEnterCommand('Send.', 'send')).toBe(true);
+    expect(isEnterCommand('Sent.', 'send')).toBe(false);
   });
 });
 
-describe('holdBackCommandPrefix', () => {
+describe('"period" (default phrase)', () => {
+  test.each(['Period.', 'period', 'Periods.'])('%p alone presses Enter', (utterance) => {
+    expect(isEnterCommand(utterance, 'period')).toBe(true);
+  });
+
+  test('a lone "." counts, because Nova-3 dictation turns spoken "period" into punctuation', () => {
+    expect(isEnterCommand('.', 'period')).toBe(true);
+    expect(isEnterCommand(' . ', 'period')).toBe(true);
+    expect(mightBeEnterCommand('.', 'period')).toBe(true);
+  });
+
   test.each([
-    ['Hello there press', 'Hello there'],
-    ['Hello there, press enter', 'Hello there,'],
-    ['press', ''],
-    ['Hello there', 'Hello there'],
-    ['I need to impress', 'I need to impress'],
-  ])('%p → %p', (input, expected) => {
-    expect(holdBackCommandPrefix(input)).toBe(expected);
+    'Yeah. Set it every time and you heard it right every time, period.',
+    'That is unique, period.',
+    'The period ends tomorrow.',
+  ])('%p is typed as text', (utterance) => {
+    expect(isEnterCommand(utterance, 'period')).toBe(false);
+  });
+
+  test('a lone "." does not count for other phrases', () => {
+    expect(isEnterCommand('.', 'submit')).toBe(false);
+  });
+});
+
+describe('mightBeEnterCommand', () => {
+  test.each(['Sub', 'Subm', 'Submit', 'Summit'])('%p could still be the command', (partial) => {
+    expect(mightBeEnterCommand(partial, 'submit')).toBe(true);
+  });
+
+  test.each(['Sure', 'Subway', 'Please', 'Submit the'])('%p is clearly not', (partial) => {
+    expect(mightBeEnterCommand(partial, 'submit')).toBe(false);
   });
 });
 
 describe('joinWithCommands', () => {
-  test('turns Enter commands into line breaks', () => {
-    expect(joinWithCommands(['Hi team.', 'Ship it today. Press enter.', 'Next message.'], true))
+  test('a command utterance becomes a line break', () => {
+    expect(joinWithCommands(['Hi team.', 'Ship it today.', 'Submit.', 'Next message.'], 'submit'))
       .toBe('Hi team. Ship it today.\nNext message.');
   });
 
-  test('a standalone command ends the line', () => {
-    expect(joinWithCommands(['First.', 'Press enter.', 'Second.', 'Press enter.'], true))
-      .toBe('First.\nSecond.');
+  test('trailing command leaves no empty line', () => {
+    expect(joinWithCommands(['First.', 'Submit.'], 'submit')).toBe('First.');
   });
 
-  test('leaves text untouched when commands are disabled', () => {
-    expect(joinWithCommands(['Hello.', 'Press enter.'], false)).toBe('Hello. Press enter.');
+  test('leaves text untouched when commands are off', () => {
+    expect(joinWithCommands(['Hello.', 'Submit.'], null)).toBe('Hello. Submit.');
   });
 });

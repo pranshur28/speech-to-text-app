@@ -1,5 +1,5 @@
 import log from '../utils/logger';
-import { holdBackCommandPrefix, parseTrailingCommand } from './voice-commands';
+import { isEnterCommand, mightBeEnterCommand } from './voice-commands';
 
 /**
  * Types Deepgram's transcript into the focused app *as it is heard*, correcting earlier
@@ -33,8 +33,8 @@ export interface LiveTyperDeps {
   getActiveWindowId(): Promise<string | null>;
   /** Dictionary replacements. */
   transform(text: string): string;
-  /** Whether spoken commands ("press enter") are recognized. */
-  commandsEnabled: boolean;
+  /** Spoken phrase that presses Enter when said on its own, or null when voice commands are off. */
+  enterPhrase: string | null;
   sleep?(ms: number): Promise<void>;
 }
 
@@ -164,13 +164,15 @@ export class LiveTyper {
   private plan(item: QueueItem): { target: string; pressEnter: boolean } {
     let text = item.text;
     let pressEnter = false;
-    if (this.deps.commandsEnabled) {
-      if (item.isFinal) {
-        const parsed = parseTrailingCommand(text);
-        text = parsed.text;
-        pressEnter = parsed.command === 'enter';
-      } else {
-        text = holdBackCommandPrefix(text);
+    const phrase = this.deps.enterPhrase;
+    if (phrase) {
+      if (item.isFinal && isEnterCommand(text, phrase)) {
+        // The whole utterance was the command: type nothing, press Enter
+        text = '';
+        pressEnter = true;
+      } else if (!item.isFinal && mightBeEnterCommand(text, phrase)) {
+        // Could still turn out to be the command — don't type it yet
+        text = '';
       }
     }
     text = this.deps.transform(text);

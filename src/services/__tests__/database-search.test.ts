@@ -42,7 +42,7 @@ describe('DatabaseService search and index', () => {
 
   beforeEach(() => {
     if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
+      fs.rmSync(testDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
     fs.mkdirSync(testDataDir, { recursive: true });
     db = new DatabaseService();
@@ -51,7 +51,7 @@ describe('DatabaseService search and index', () => {
   afterEach(() => {
     db?.close();
     if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
+      fs.rmSync(testDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   });
 
@@ -124,13 +124,13 @@ describe('DatabaseService search and index', () => {
 describe('DatabaseService migration from version 2', () => {
   afterEach(() => {
     if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
+      fs.rmSync(testDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   });
 
   test('replaces the old FTS triggers and rebuilds the index', () => {
     if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
+      fs.rmSync(testDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
     fs.mkdirSync(testDataDir, { recursive: true });
 

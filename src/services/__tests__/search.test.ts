@@ -18,7 +18,7 @@ describe('SearchService', () => {
   beforeEach(() => {
     // Clean up test directory
     if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
+      fs.rmSync(testDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
     fs.mkdirSync(testDataDir, { recursive: true });
 
@@ -63,7 +63,7 @@ describe('SearchService', () => {
       db.close();
     }
     if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
+      fs.rmSync(testDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   });
 

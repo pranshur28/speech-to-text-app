@@ -24,6 +24,7 @@ A powerful, polished note-taking companion that transforms speech into searchabl
   - **Nova-3**: Smart formatting (numbers, dates) and spoken punctuation ("comma", "period", "new line", "new paragraph")
   - **Type as you speak** (default): words appear in your text box as they are heard and are corrected in place as Deepgram refines them. Only text the app typed is ever erased, and corrections stop if you switch windows
   - Or paste each phrase once confirmed (Settings switch); your clipboard is always restored afterwards
+  - **Hands-free Enter:** pause, say **"period"** on its own, pause — the app presses Enter (e.g. to send a chat message) and keeps listening. Inside a sentence it's just a word. The phrase is configurable and is sent to Deepgram as a keyterm for reliable recognition
   - Clear error messages (and a desktop notification when the window is hidden) if Deepgram can't connect or the connection drops
 
 - **📖 Custom Dictionary**

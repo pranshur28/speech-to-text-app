@@ -17,7 +17,7 @@ describe('DictionaryService', () => {
 
   beforeEach(() => {
     if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
+      fs.rmSync(testDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
     fs.mkdirSync(testDataDir, { recursive: true });
     db = new DatabaseService();
@@ -27,7 +27,7 @@ describe('DictionaryService', () => {
   afterEach(() => {
     db?.close();
     if (fs.existsSync(testDataDir)) {
-      fs.rmSync(testDataDir, { recursive: true, force: true });
+      fs.rmSync(testDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   });
 

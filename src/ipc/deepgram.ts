@@ -2,7 +2,7 @@ import { ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { DeepgramStreamingService } from '../services/deepgram';
 import { SttEngine } from '../services/config';
 import { LiveTyper } from '../services/live-typer';
-import { joinWithCommands, parseTrailingCommand } from '../services/voice-commands';
+import { isEnterCommand, joinWithCommands } from '../services/voice-commands';
 import log from '../utils/logger';
 import { ServiceContext } from './types';
 
@@ -41,7 +41,7 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
     pressEnter: () => ctx.getPasteService()!.pressEnter(),
     getActiveWindowId: () => ctx.getPasteService()!.getActiveWindowId(),
     transform: (text) => ctx.getDictionaryService()?.applyReplacements(text) ?? text,
-    commandsEnabled: ctx.getConfigService().getVoiceCommands(),
+    enterPhrase: ctx.getConfigService().getActiveEnterPhrase(),
   });
 
   // Paste a finalized phrase into the focused app via clipboard (Ctrl+V), one at a time
@@ -50,9 +50,10 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
       const pasteService = ctx.getPasteService();
       if (!pasteService) return;
 
-      const { text, command } = ctx.getConfigService().getVoiceCommands()
-        ? parseTrailingCommand(phrase)
-        : { text: phrase, command: null };
+      // The Enter phrase said on its own presses Enter instead of being pasted
+      const enterPhrase = ctx.getConfigService().getActiveEnterPhrase();
+      const command = enterPhrase && isEnterCommand(phrase, enterPhrase) ? 'enter' : null;
+      const text = command ? '' : phrase;
       const replaced = ctx.getDictionaryService()?.applyReplacements(text) ?? text;
       const shortcutMgr = ctx.getShortcutManager();
 
@@ -110,7 +111,12 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
     liveTyper = ctx.getConfigService().getLiveTyping() ? createLiveTyper() : null;
 
     const engine = ctx.getConfigService().getSttEngine();
-    const keyterms = ctx.getDictionaryService()?.getKeyterms().terms ?? [];
+    // The Enter phrase goes first so the keyterm budget can never drop it
+    const enterPhrase = ctx.getConfigService().getActiveEnterPhrase();
+    const dictionaryTerms = ctx.getDictionaryService()?.getKeyterms().terms ?? [];
+    const keyterms = enterPhrase
+      ? [enterPhrase, ...dictionaryTerms.filter((term) => term.toLowerCase() !== enterPhrase.toLowerCase())]
+      : dictionaryTerms;
     const svc = new DeepgramStreamingService(apiKey, engine, keyterms);
 
     // Live typing: every guess is typed and corrected in place.
@@ -158,7 +164,7 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
 
       // Text was already typed/pasted live during recording. For the saved copy, voice
       // commands become line breaks and dictionary replacements apply to the whole text.
-      const spoken = joinWithCommands(deepgramService.getFinals(), ctx.getConfigService().getVoiceCommands());
+      const spoken = joinWithCommands(deepgramService.getFinals(), ctx.getConfigService().getActiveEnterPhrase());
       if (!transcript || spoken.trim().length === 0) {
         return { success: true, transcript: transcript || '', formatted: '' };
       }
@@ -236,5 +242,18 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
   ipcMain.handle('set-voice-commands', (_event: IpcMainInvokeEvent, enabled: boolean) => {
     ctx.getConfigService().setVoiceCommands(!!enabled);
     return { success: true };
+  });
+
+  ipcMain.handle('get-enter-phrase', () => {
+    return ctx.getConfigService().getEnterPhrase();
+  });
+
+  ipcMain.handle('set-enter-phrase', (_event: IpcMainInvokeEvent, phrase: string) => {
+    const trimmed = (phrase || '').trim();
+    if (!/[\p{L}\p{N}]/u.test(trimmed) || trimmed.split(/\s+/).length > 3) {
+      return { success: false, error: 'Use one to three words' };
+    }
+    ctx.getConfigService().setEnterPhrase(trimmed);
+    return { success: true, error: null };
   });
 }

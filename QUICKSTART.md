@@ -67,6 +67,11 @@ Tests run inside Electron's Node.js so the native SQLite module loads without re
 - Words appear in the focused app as you speak (turn off "Type as you speak" in Settings to paste whole phrases instead)
 - Press again to stop; the full transcript is saved to History
 
+### Hands-free Enter
+- Pause, say **"period"** on its own, then pause — the app presses Enter and keeps listening
+- Said inside a sentence ("…and that's final, period.") it's typed as a normal word
+- Change the phrase or turn it off in Settings → Transcription → Voice commands
+
 ### Custom Dictionary
 - Open the **Settings** tab → Dictionary section
 - Add phrase replacements (e.g., spoken "gonna" → replaced with "going to")

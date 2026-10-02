@@ -49,16 +49,28 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [listeningTarget, setListeningTarget] = useState<'toggle' | 'hold' | null>(null);
   const [liveTyping, setLiveTyping] = useState(true);
   const [voiceCommands, setVoiceCommands] = useState(true);
+  const [enterPhrase, setEnterPhrase] = useState('period');
+  const [phraseStatus, setPhraseStatus] = useState<{ ok: boolean; message: string } | null>(null);
 
   useEffect(() => {
     window.electronAPI.getDeepgramApiKey().then(setDeepgramApiKey);
     window.electronAPI.getLiveTyping().then(setLiveTyping);
     window.electronAPI.getVoiceCommands().then(setVoiceCommands);
+    window.electronAPI.getEnterPhrase().then(setEnterPhrase);
   }, []);
 
   const handleVoiceCommandsChange = (enabled: boolean) => {
     setVoiceCommands(enabled);
     window.electronAPI.setVoiceCommands(enabled);
+  };
+
+  const handleSaveEnterPhrase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = await window.electronAPI.setEnterPhrase(enterPhrase);
+    setPhraseStatus(result.success
+      ? { ok: true, message: 'Saved' }
+      : { ok: false, message: result.error || 'Could not save' });
+    if (result.success) setTimeout(() => setPhraseStatus(null), 2000);
   };
 
   const handleLiveTypingChange = (enabled: boolean) => {
@@ -175,7 +187,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           <div>
             <label className="field-label" htmlFor="voice-commands">Voice commands</label>
             <p className="field-help">
-              End a phrase with "press enter" to press Enter, e.g. "See you at three, press enter." Said mid-sentence, it's typed as normal text. Applies from the next recording.
+              Pause, say "{enterPhrase || 'period'}" on its own, then pause again to press Enter. Inside a sentence it's
+              typed as normal text. Applies from the next recording.
             </p>
           </div>
           <Switch.Root
@@ -187,6 +200,36 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <Switch.Thumb className="switch-thumb" />
           </Switch.Root>
         </div>
+
+        {voiceCommands && (
+          <form className="field" onSubmit={handleSaveEnterPhrase}>
+            <label className="field-label" htmlFor="enter-phrase">Phrase that presses Enter</label>
+            <div className="input-row">
+              <input
+                id="enter-phrase"
+                type="text"
+                className="input"
+                value={enterPhrase}
+                onChange={(e) => {
+                  setEnterPhrase(e.target.value);
+                  setPhraseStatus(null);
+                }}
+                placeholder="period"
+                spellCheck={false}
+              />
+              <button type="submit" className={`btn ${phraseStatus?.ok ? 'btn-success' : 'btn-primary'}`}>
+                {phraseStatus?.ok ? 'Saved' : 'Save'}
+              </button>
+            </div>
+            {phraseStatus && !phraseStatus.ok ? (
+              <p className="field-help field-help--error" role="alert">{phraseStatus.message}</p>
+            ) : (
+              <p className="field-help">
+                One to three words you'd never say on their own. It's sent to Deepgram so it's recognized reliably.
+              </p>
+            )}
+          </form>
+        )}
       </section>
 
       <section className="settings-section" aria-labelledby="settings-shortcuts">

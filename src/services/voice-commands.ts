@@ -1,53 +1,94 @@
 /**
- * Spoken commands recognized at the *end* of a finalized phrase.
- * "Write the report. Press enter." → text "Write the report." + Enter key.
- * Mid-sentence uses ("I'll press enter later") are left as normal text.
+ * Spoken "press Enter" command. To avoid accidental triggers it only counts when it is the
+ * *entire* utterance — pause, say the phrase (default "period"), pause. Said inside a
+ * sentence ("…every time, period.") it is typed as normal text.
+ *
+ * Recognition errors are tolerated (one letter off, e.g. "periods"), which is safe because
+ * a lone mis-heard word is almost never intended text.
  */
 
-export type VoiceCommand = 'enter';
+export const DEFAULT_ENTER_PHRASE = 'period';
 
-// Trailing "press enter", allowing Deepgram's punctuation/casing around it
-const TRAILING_ENTER = /(^|[\s,.;:!?-])press[\s,]+enter[\s.,;:!?]*$/i;
+// Nova-3's dictation mode turns these spoken words into punctuation before we see them,
+// so a lone "." must count as the command when the phrase is "period".
+const DICTATED_SYMBOLS: Record<string, string> = {
+  period: '.',
+  comma: ',',
+  colon: ':',
+  questionmark: '?',
+  exclamationmark: '!',
+};
 
-// While a phrase is still being heard, hold back a trailing "press" / "press enter" so the
-// command words aren't typed and then erased.
-const TRAILING_COMMAND_PREFIX = /(^|\s)press(?:[\s,]+enter)?[\s.,;:!?]*$/i;
-
-export function parseTrailingCommand(text: string): { text: string; command: VoiceCommand | null } {
-  const match = text.match(TRAILING_ENTER);
-  if (!match || match.index === undefined) {
-    return { text, command: null };
-  }
-  // Keep the leading separator's punctuation (e.g. the "." in "done. Press enter")
-  const kept = text.slice(0, match.index + match[1].length);
-  // Drop whitespace and dangling clause punctuation left before the command ("Okay, press enter")
-  const cleaned = kept.replace(/[\s,;:-]+$/, '');
-  return { text: cleaned, command: 'enter' };
+function isDictatedSymbol(utterance: string, phrase: string): boolean {
+  const symbol = DICTATED_SYMBOLS[compact(phrase)];
+  return !!symbol && utterance.trim() === symbol;
 }
 
-/** Text to show for an in-progress phrase: everything except a possible command being spoken. */
-export function holdBackCommandPrefix(text: string): string {
-  const match = text.match(TRAILING_COMMAND_PREFIX);
-  if (!match || match.index === undefined) return text;
-  return text.slice(0, match.index + match[1].length).replace(/\s+$/, '');
+/** Lowercase letters/digits only, no spaces: "Sub-mit." → "submit". */
+function compact(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function editDistance(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let diagonal = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const above = prev[j];
+      prev[j] = Math.min(
+        prev[j] + 1,
+        prev[j - 1] + 1,
+        diagonal + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+      diagonal = above;
+    }
+  }
+  return prev[b.length];
+}
+
+// Short phrases must match exactly; longer ones may be one letter off
+function allowedErrors(phrase: string): number {
+  return phrase.length >= 6 ? 1 : 0;
+}
+
+/** True if this whole utterance is the Enter command (allowing small mishearings). */
+export function isEnterCommand(utterance: string, phrase: string): boolean {
+  if (isDictatedSymbol(utterance, phrase)) return true;
+  const said = compact(utterance);
+  const target = compact(phrase);
+  if (!said || !target) return false;
+  return editDistance(said, target) <= allowedErrors(target);
 }
 
 /**
- * Build the saved transcript from finalized phrases: commands are removed and an
- * Enter becomes a line break.
+ * While an utterance is still being heard: could it turn out to be the command?
+ * If so, live typing holds it back instead of typing then erasing it.
  */
-export function joinWithCommands(finals: string[], commandsEnabled: boolean): string {
+export function mightBeEnterCommand(partialUtterance: string, phrase: string): boolean {
+  if (isDictatedSymbol(partialUtterance, phrase)) return true;
+  const said = compact(partialUtterance);
+  const target = compact(phrase);
+  if (!said || !target) return false;
+  return target.startsWith(said) || isEnterCommand(partialUtterance, phrase);
+}
+
+/**
+ * Build the saved transcript from finalized phrases: a command utterance becomes a line
+ * break. Pass `phrase` null when voice commands are off.
+ */
+export function joinWithCommands(finals: string[], phrase: string | null): string {
   let result = '';
   let needsSeparator = false;
-  for (const phrase of finals) {
-    const { text, command } = commandsEnabled ? parseTrailingCommand(phrase) : { text: phrase, command: null };
-    if (text) {
-      result += (needsSeparator ? ' ' : '') + text;
-      needsSeparator = true;
-    }
-    if (command === 'enter') {
+  for (const utterance of finals) {
+    if (phrase && isEnterCommand(utterance, phrase)) {
       result += '\n';
       needsSeparator = false;
+      continue;
+    }
+    if (utterance) {
+      result += (needsSeparator ? ' ' : '') + utterance;
+      needsSeparator = true;
     }
   }
   return result.replace(/\n+$/, '');

@@ -2,6 +2,7 @@ import { app } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import log from '../utils/logger';
+import { DEFAULT_ENTER_PHRASE } from './voice-commands';
 
 export type SttEngine = 'flux' | 'nova-3';
 
@@ -10,6 +11,7 @@ interface Config {
   sttEngine?: SttEngine;
   liveTyping?: boolean;
   voiceCommands?: boolean;
+  enterPhrase?: string;
   toggleShortcut?: string;
   holdShortcut?: string;
 }
@@ -106,5 +108,20 @@ export class ConfigService {
   setVoiceCommands(enabled: boolean): void {
     this.config.voiceCommands = enabled;
     this.save();
+  }
+
+  /** Phrase that presses Enter when said on its own. */
+  getEnterPhrase(): string {
+    return this.config.enterPhrase?.trim() || DEFAULT_ENTER_PHRASE;
+  }
+
+  setEnterPhrase(phrase: string): void {
+    this.config.enterPhrase = phrase.trim();
+    this.save();
+  }
+
+  /** The active Enter phrase, or null when voice commands are off. */
+  getActiveEnterPhrase(): string | null {
+    return this.getVoiceCommands() ? this.getEnterPhrase() : null;
   }
 }

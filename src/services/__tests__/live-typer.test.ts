@@ -23,7 +23,7 @@ function makeHarness(overrides: Partial<LiveTyperDeps> = {}) {
     pressEnter: async () => { state.screen += '⏎'; state.ops.push('enter'); },
     getActiveWindowId: async () => state.window,
     transform: (text) => text,
-    commandsEnabled: true,
+    enterPhrase: 'submit',
     sleep: () => new Promise((resolve) => setTimeout(resolve, 0)),
     ...overrides,
   };
@@ -174,60 +174,86 @@ describe('LiveTyper', () => {
   });
 
   describe('voice commands', () => {
-    test('"press enter" at the end of a phrase is removed and presses Enter', async () => {
+    test('saying the phrase on its own presses Enter and types nothing', async () => {
       const { state, typer } = makeHarness();
 
-      typer.update('Ship it today', false);
-      typer.update('Ship it today press', false);
-      typer.update('Ship it today press enter', false);
-      typer.update('Ship it today. Press enter.', true);
-      await typer.flush();
-
-      expect(state.screen).toBe('Ship it today.⏎');
-      // The command words were never typed
-      expect(state.ops.some((op) => /press/i.test(op))).toBe(false);
-    });
-
-    test('a standalone "press enter" just presses Enter, with no stray space', async () => {
-      const { state, typer } = makeHarness();
-
-      typer.update('Hello team.', true);
-      typer.update('Press enter.', true);
+      typer.update('Ship it today.', true);
+      typer.update('Sub', false);
+      typer.update('Submit', false);
+      typer.update('Submit.', true);
       typer.update('Next message.', true);
       await typer.flush();
 
-      expect(state.screen).toBe('Hello team.⏎Next message.');
+      expect(state.screen).toBe('Ship it today.⏎Next message.');
+      // The command word was never typed
+      expect(state.ops.some((op) => /sub/i.test(op))).toBe(false);
     });
 
-    test('mid-sentence "press enter" is typed as normal text', async () => {
+    test('a common mishearing said on its own still counts', async () => {
       const { state, typer } = makeHarness();
 
-      typer.update("I'll press enter later.", true);
+      typer.update('Hello.', true);
+      typer.update('Summit.', true);
       await typer.flush();
 
-      expect(state.screen).toBe("I'll press enter later.");
+      expect(state.screen).toBe('Hello.⏎');
+    });
+
+    test('the phrase inside a sentence is typed as normal text', async () => {
+      const { state, typer } = makeHarness();
+
+      typer.update('Please submit the form.', true);
+      await typer.flush();
+
+      expect(state.screen).toBe('Please submit the form.');
       expect(state.ops).not.toContain('enter');
     });
 
-    test('commands can be turned off', async () => {
-      const { state, typer } = makeHarness({ commandsEnabled: false });
+    test('a held-back word that turns out not to be the command is typed', async () => {
+      const { state, typer } = makeHarness();
 
-      typer.update('Done. Press enter.', true);
+      typer.update('Sub', false);
+      await typer.flush();
+      expect(state.screen).toBe('');
+
+      typer.update('Subway is great', false);
+      typer.update('Subway is great.', true);
+      await typer.flush();
+      expect(state.screen).toBe('Subway is great.');
+    });
+
+    test('"period" alone presses Enter, including the "." Nova-3 dictation produces', async () => {
+      const { state, typer } = makeHarness({ enterPhrase: 'period' });
+
+      typer.update('Every time, period.', true);
+      typer.update('Period.', true);
+      typer.update('Next.', true);
+      typer.update('.', true);
       await typer.flush();
 
-      expect(state.screen).toBe('Done. Press enter.');
+      expect(state.screen).toBe('Every time, period.⏎Next.⏎');
+    });
+
+    test('commands can be turned off', async () => {
+      const { state, typer } = makeHarness({ enterPhrase: null });
+
+      typer.update('Submit.', true);
+      await typer.flush();
+
+      expect(state.screen).toBe('Submit.');
     });
 
     test('no Enter is pressed after switching windows mid-phrase', async () => {
       const { state, typer } = makeHarness();
 
-      typer.update('message', false);
+      typer.update('Sub', false);
       await typer.flush();
       state.window = 'win-2';
-      typer.update('Message. Press enter.', true);
+      typer.update('Submit.', true);
       await typer.flush();
 
-      expect(state.ops).not.toContain('enter');
+      // The command started in another window, so pressing Enter now could hit the wrong app
+      expect(state.ops).toEqual([]);
     });
   });
 });
