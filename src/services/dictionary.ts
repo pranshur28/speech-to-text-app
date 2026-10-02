@@ -17,6 +17,17 @@ export interface DictionaryEntryInsert {
   is_case_sensitive?: boolean;
 }
 
+// Deepgram allows 500 keyterm tokens; stay below it since our count is an estimate
+export const KEYTERM_TOKEN_BUDGET = 450;
+
+// Letters/digits with spaces, apostrophes, hyphens or periods — something a person can say
+const SPEAKABLE = /^[\p{L}\p{N}][\p{L}\p{N}' .-]*$/u;
+
+// Conservative token estimate (real tokenizers average ~4 chars/token for English)
+export function estimateKeytermTokens(term: string): number {
+  return Math.max(1, Math.ceil(term.length / 3));
+}
+
 export class DictionaryService {
   private db: Database.Database;
 
@@ -109,24 +120,59 @@ export class DictionaryService {
     log.info(`[DictionaryService] Toggled enabled for entry #${id}`);
   }
 
-  // Apply all enabled dictionary replacements to text
-  // This is the core function called after GPT formatting
+  // Apply all enabled dictionary replacements to transcribed text.
+  // Matches whole words only, so "cat" never rewrites "category".
   applyReplacements(text: string): string {
     const entries = this.getEnabledEntries();
     let result = text;
 
     for (const entry of entries) {
-      if (entry.is_case_sensitive) {
-        // Case-sensitive: simple string split and join
-        result = result.split(entry.spoken_phrase).join(entry.replacement);
-      } else {
-        // Case-insensitive: use regex with 'gi' flags
-        const regex = new RegExp(this.escapeRegex(entry.spoken_phrase), 'gi');
-        result = result.replace(regex, entry.replacement);
-      }
+      if (!entry.spoken_phrase) continue;
+      const flags = entry.is_case_sensitive ? 'gu' : 'giu';
+      const regex = new RegExp(
+        `(?<![\\p{L}\\p{N}_])${this.escapeRegex(entry.spoken_phrase)}(?![\\p{L}\\p{N}_])`,
+        flags
+      );
+      // Function replacer so "$" in the replacement is inserted literally
+      result = result.replace(regex, () => entry.replacement);
     }
 
     return result;
+  }
+
+  /**
+   * Terms to send to Deepgram as keyterms, so the right words are recognized in the first place.
+   * Uses the replacement when it is a speakable word/phrase (e.g. "deep gram" → "Deepgram"),
+   * otherwise the spoken phrase (e.g. "Kleene star" → "K*"). Capped to stay under Deepgram's
+   * 500-token keyterm limit, which would otherwise reject the connection.
+   */
+  getKeyterms(): { terms: string[]; estimatedTokens: number; dropped: number } {
+    const seen = new Set<string>();
+    const terms: string[] = [];
+    let estimatedTokens = 0;
+    let dropped = 0;
+
+    // Oldest entries first, so adding new entries never pushes out existing ones
+    const entries = this.db.prepare(
+      'SELECT * FROM dictionary_entries WHERE is_enabled = 1 ORDER BY created_at ASC, id ASC'
+    ).all() as DictionaryEntry[];
+
+    for (const entry of entries) {
+      const replacement = entry.replacement.trim();
+      const term = SPEAKABLE.test(replacement) ? replacement : entry.spoken_phrase.trim();
+      if (!term || seen.has(term.toLowerCase())) continue;
+
+      const cost = estimateKeytermTokens(term);
+      if (estimatedTokens + cost > KEYTERM_TOKEN_BUDGET) {
+        dropped++;
+        continue;
+      }
+      seen.add(term.toLowerCase());
+      terms.push(term);
+      estimatedTokens += cost;
+    }
+
+    return { terms, estimatedTokens, dropped };
   }
 
   // Escape special regex characters in a string
