@@ -2,12 +2,17 @@ import { ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { DeepgramStreamingService } from '../services/deepgram';
 import { SttEngine } from '../services/config';
 import { LiveTyper } from '../services/live-typer';
+import { joinWithCommands, parseTrailingCommand } from '../services/voice-commands';
 import log from '../utils/logger';
 import { ServiceContext } from './types';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function registerDeepgramHandlers(ctx: ServiceContext) {
   // Serialized paste queue — prevents overlapping clipboard operations
   let pasteQueue: Promise<void> = Promise.resolve();
+  // Paste mode separates phrases with a leading space, like live typing
+  let pasteNeedsSeparator = false;
 
   // Live typing for the current session (null when "paste when confirmed" mode is used)
   let liveTyper: LiveTyper | null = null;
@@ -33,25 +38,51 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
     typeText: (text) => ctx.getPasteService()!.typeText(text),
     pasteText: (text) => ctx.getPasteService()!.paste(text),
     pressBackspace: (count) => ctx.getPasteService()!.pressBackspace(count),
+    pressEnter: () => ctx.getPasteService()!.pressEnter(),
     getActiveWindowId: () => ctx.getPasteService()!.getActiveWindowId(),
     transform: (text) => ctx.getDictionaryService()?.applyReplacements(text) ?? text,
+    commandsEnabled: ctx.getConfigService().getVoiceCommands(),
   });
 
   // Paste a finalized phrase into the focused app via clipboard (Ctrl+V), one at a time
-  const queuePaste = (text: string) => {
+  const queuePaste = (phrase: string) => {
     pasteQueue = pasteQueue.then(async () => {
       const pasteService = ctx.getPasteService();
       if (!pasteService) return;
-      const toPaste = ctx.getDictionaryService()?.applyReplacements(text) ?? text;
+
+      const { text, command } = ctx.getConfigService().getVoiceCommands()
+        ? parseTrailingCommand(phrase)
+        : { text: phrase, command: null };
+      const replaced = ctx.getDictionaryService()?.applyReplacements(text) ?? text;
+      const shortcutMgr = ctx.getShortcutManager();
+
       try {
-        // Enter paste mode: freeze hotkey tracking and get currently held modifiers
-        // so paste doesn't corrupt key state or release user's physical modifier keys
-        const shortcutMgr = ctx.getShortcutManager();
-        const heldModifiers = shortcutMgr.enterPasteMode();
-        try {
-          await pasteService.paste(toPaste + ' ', heldModifiers);
-        } finally {
-          shortcutMgr.exitPasteMode();
+        if (replaced) {
+          // Enter paste mode: ignore our synthetic keys and get currently held modifiers
+          // so paste doesn't corrupt key state or release the user's physical modifier keys
+          const heldModifiers = shortcutMgr.enterPasteMode();
+          try {
+            await pasteService.paste((pasteNeedsSeparator ? ' ' : '') + replaced, heldModifiers);
+          } finally {
+            shortcutMgr.exitPasteMode();
+          }
+          pasteNeedsSeparator = true;
+        }
+
+        if (command === 'enter') {
+          // Never press Enter while a modifier is held (it would become Ctrl+Enter etc.)
+          for (;;) {
+            const held = shortcutMgr.enterPasteMode();
+            const anyHeld = held.ctrlHeld || held.shiftHeld || held.altHeld || held.metaHeld;
+            try {
+              if (!anyHeld) await pasteService.pressEnter();
+            } finally {
+              shortcutMgr.exitPasteMode();
+            }
+            if (!anyHeld) break;
+            await sleep(40);
+          }
+          pasteNeedsSeparator = false;
         }
       } catch (err) {
         log.error('Error pasting live transcript:', err);
@@ -74,6 +105,7 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
 
     // Reset output state for the new session
     pasteQueue = Promise.resolve();
+    pasteNeedsSeparator = false;
     liveTyper?.reset();
     liveTyper = ctx.getConfigService().getLiveTyping() ? createLiveTyper() : null;
 
@@ -124,13 +156,13 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
       await pasteQueue;
       await liveTyper?.flush();
 
-      if (!transcript || transcript.trim().length === 0) {
-        return { success: true, transcript: '', formatted: '' };
+      // Text was already typed/pasted live during recording. For the saved copy, voice
+      // commands become line breaks and dictionary replacements apply to the whole text.
+      const spoken = joinWithCommands(deepgramService.getFinals(), ctx.getConfigService().getVoiceCommands());
+      if (!transcript || spoken.trim().length === 0) {
+        return { success: true, transcript: transcript || '', formatted: '' };
       }
-
-      // Text was already pasted live during recording.
-      // Apply dictionary replacements to the full transcript for the saved version.
-      const finalText = ctx.getDictionaryService()?.applyReplacements(transcript) ?? transcript;
+      const finalText = ctx.getDictionaryService()?.applyReplacements(spoken) ?? spoken;
 
       ctx.getDatabaseService()?.saveTranscription({
         raw_text: transcript,
@@ -194,6 +226,15 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
 
   ipcMain.handle('set-live-typing', (_event: IpcMainInvokeEvent, enabled: boolean) => {
     ctx.getConfigService().setLiveTyping(!!enabled);
+    return { success: true };
+  });
+
+  ipcMain.handle('get-voice-commands', () => {
+    return ctx.getConfigService().getVoiceCommands();
+  });
+
+  ipcMain.handle('set-voice-commands', (_event: IpcMainInvokeEvent, enabled: boolean) => {
+    ctx.getConfigService().setVoiceCommands(!!enabled);
     return { success: true };
   });
 }

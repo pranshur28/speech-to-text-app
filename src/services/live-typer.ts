@@ -1,4 +1,5 @@
 import log from '../utils/logger';
+import { holdBackCommandPrefix, parseTrailingCommand } from './voice-commands';
 
 /**
  * Types Deepgram's transcript into the focused app *as it is heard*, correcting earlier
@@ -27,10 +28,13 @@ export interface LiveTyperDeps {
   /** Insert characters a keyboard can't type (symbols, accents, newlines) via the clipboard. */
   pasteText(text: string): Promise<void>;
   pressBackspace(count: number): Promise<void>;
+  pressEnter(): Promise<void>;
   /** Identifier of the foreground window, or null if unknown. */
   getActiveWindowId(): Promise<string | null>;
   /** Dictionary replacements. */
   transform(text: string): string;
+  /** Whether spoken commands ("press enter") are recognized. */
+  commandsEnabled: boolean;
   sleep?(ms: number): Promise<void>;
 }
 
@@ -78,6 +82,9 @@ function anyHeld(held: HeldModifiers): boolean {
 
 export class LiveTyper {
   private onScreen = '';
+  // Phrases are separated by a space typed at the start of the *next* phrase, so an
+  // Enter command or the end of dictation never leaves a trailing space behind.
+  private needsSeparator = false;
   private windowId: string | null | undefined = undefined; // undefined = not captured yet
   private detached = false;
   private queue: QueueItem[] = [];
@@ -115,6 +122,7 @@ export class LiveTyper {
     this.generation++;
     this.queue = [];
     this.inFlight = null;
+    this.needsSeparator = false;
     this.resetSegment();
   }
 
@@ -152,12 +160,32 @@ export class LiveTyper {
     }
   }
 
+  /** What should be on screen for this phrase, and whether to press Enter after it. */
+  private plan(item: QueueItem): { target: string; pressEnter: boolean } {
+    let text = item.text;
+    let pressEnter = false;
+    if (this.deps.commandsEnabled) {
+      if (item.isFinal) {
+        const parsed = parseTrailingCommand(text);
+        text = parsed.text;
+        pressEnter = parsed.command === 'enter';
+      } else {
+        text = holdBackCommandPrefix(text);
+      }
+    }
+    text = this.deps.transform(text);
+    const separator = this.needsSeparator && text ? ' ' : '';
+    return { target: separator + text, pressEnter };
+  }
+
   /** Returns false if it must be retried later (a modifier key is held). */
   private async apply(item: QueueItem): Promise<boolean> {
-    if (this.detached) return true;
+    if (this.detached) {
+      // Text in this phrase was abandoned; the next phrase starts fresh where focus is now
+      return true;
+    }
 
-    // A finalized phrase gets a trailing space so the next one starts cleanly
-    const target = this.deps.transform(item.text) + (item.isFinal ? ' ' : '');
+    const { target, pressEnter } = this.plan(item);
 
     return this.deps.runInput(async (held) => {
       if (anyHeld(held)) return false;
@@ -181,6 +209,15 @@ export class LiveTyper {
         }
       }
       this.onScreen = target;
+
+      if (item.isFinal) {
+        if (pressEnter) {
+          await this.deps.pressEnter();
+          this.needsSeparator = false;
+        } else if (target) {
+          this.needsSeparator = true;
+        }
+      }
       return true;
     });
   }

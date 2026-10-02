@@ -48,11 +48,18 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [saveMessage, setSaveMessage] = useState('');
   const [listeningTarget, setListeningTarget] = useState<'toggle' | 'hold' | null>(null);
   const [liveTyping, setLiveTyping] = useState(true);
+  const [voiceCommands, setVoiceCommands] = useState(true);
 
   useEffect(() => {
     window.electronAPI.getDeepgramApiKey().then(setDeepgramApiKey);
     window.electronAPI.getLiveTyping().then(setLiveTyping);
+    window.electronAPI.getVoiceCommands().then(setVoiceCommands);
   }, []);
+
+  const handleVoiceCommandsChange = (enabled: boolean) => {
+    setVoiceCommands(enabled);
+    window.electronAPI.setVoiceCommands(enabled);
+  };
 
   const handleLiveTypingChange = (enabled: boolean) => {
     setLiveTyping(enabled);
@@ -159,6 +166,23 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             id="live-typing"
             checked={liveTyping}
             onCheckedChange={handleLiveTypingChange}
+          >
+            <Switch.Thumb className="switch-thumb" />
+          </Switch.Root>
+        </div>
+
+        <div className="field field--row">
+          <div>
+            <label className="field-label" htmlFor="voice-commands">Voice commands</label>
+            <p className="field-help">
+              End a phrase with "press enter" to press Enter, e.g. "See you at three, press enter." Said mid-sentence, it's typed as normal text. Applies from the next recording.
+            </p>
+          </div>
+          <Switch.Root
+            className="switch-root"
+            id="voice-commands"
+            checked={voiceCommands}
+            onCheckedChange={handleVoiceCommandsChange}
           >
             <Switch.Thumb className="switch-thumb" />
           </Switch.Root>

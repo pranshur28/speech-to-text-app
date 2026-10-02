@@ -50,6 +50,8 @@ export interface IElectronAPI {
   setSttEngine: (engine: SttEngine) => Promise<{ success: boolean }>;
   getLiveTyping: () => Promise<boolean>;
   setLiveTyping: (enabled: boolean) => Promise<{ success: boolean }>;
+  getVoiceCommands: () => Promise<boolean>;
+  setVoiceCommands: (enabled: boolean) => Promise<{ success: boolean }>;
 }
 
 const electronAPI: IElectronAPI = {
@@ -127,6 +129,8 @@ const electronAPI: IElectronAPI = {
   setSttEngine: (engine: SttEngine) => ipcRenderer.invoke('set-stt-engine', engine),
   getLiveTyping: () => ipcRenderer.invoke('get-live-typing'),
   setLiveTyping: (enabled: boolean) => ipcRenderer.invoke('set-live-typing', enabled),
+  getVoiceCommands: () => ipcRenderer.invoke('get-voice-commands'),
+  setVoiceCommands: (enabled: boolean) => ipcRenderer.invoke('set-voice-commands', enabled),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

@@ -215,6 +215,11 @@ export class DeepgramStreamingService {
     }
   }
 
+  /** Finalized phrases received so far, in order. */
+  getFinals(): string[] {
+    return [...this.finals];
+  }
+
   sendAudio(chunk: Buffer): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(chunk);

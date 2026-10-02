@@ -3,9 +3,9 @@ import { BrowserWindow } from 'electron';
 import log from '../utils/logger';
 
 // Keys our own simulated input can produce: typing (letters, digits, punctuation, Space,
-// Shift), corrections (Backspace) and clipboard paste (Ctrl+V).
+// Shift), corrections (Backspace), the "press enter" voice command and clipboard paste (Ctrl+V).
 const SYNTHESIZED_KEY_NAMES = [
-  'Backspace', 'Space', 'Shift', 'ShiftRight', 'Ctrl', 'CtrlRight',
+  'Backspace', 'Space', 'Enter', 'Shift', 'ShiftRight', 'Ctrl', 'CtrlRight',
   'Semicolon', 'Equal', 'Comma', 'Minus', 'Period', 'Slash', 'Backquote',
   'BracketLeft', 'Backslash', 'BracketRight', 'Quote',
   ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split(''),

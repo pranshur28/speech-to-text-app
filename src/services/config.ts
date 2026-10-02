@@ -9,6 +9,7 @@ interface Config {
   deepgramApiKey?: string;
   sttEngine?: SttEngine;
   liveTyping?: boolean;
+  voiceCommands?: boolean;
   toggleShortcut?: string;
   holdShortcut?: string;
 }
@@ -94,6 +95,16 @@ export class ConfigService {
 
   setLiveTyping(enabled: boolean): void {
     this.config.liveTyping = enabled;
+    this.save();
+  }
+
+  /** Spoken commands such as "press enter" (on by default). */
+  getVoiceCommands(): boolean {
+    return this.config.voiceCommands !== false;
+  }
+
+  setVoiceCommands(enabled: boolean): void {
+    this.config.voiceCommands = enabled;
     this.save();
   }
 }

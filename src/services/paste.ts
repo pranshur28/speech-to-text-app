@@ -105,6 +105,12 @@ export class PasteService {
     }
   }
 
+  async pressEnter(): Promise<void> {
+    const { keyboard, Key } = nut();
+    await keyboard.pressKey(Key.Enter);
+    await keyboard.releaseKey(Key.Enter);
+  }
+
   /** Foreground window identity, used to stop correcting text if the user switches windows. */
   async getActiveWindowId(): Promise<string | null> {
     try {
