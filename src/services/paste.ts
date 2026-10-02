@@ -2,28 +2,10 @@ const { execSync } = require('child_process');
 const { clipboard } = require('electron');
 import log from '../utils/logger';
 
-export class PasteService {
-  // Type a chunk of text directly via keyboard simulation (no clipboard)
-  async typeText(text: string): Promise<void> {
-    try {
-      if (process.platform === 'win32') {
-        const { keyboard } = require('@nut-tree-fork/nut-js');
-        keyboard.config.autoDelayMs = 0;
-        await keyboard.type(text);
-      } else if (process.platform === 'darwin') {
-        // Use clipboard + paste for each chunk on macOS (AppleScript typing is unreliable for Unicode)
-        clipboard.writeText(text);
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        execSync(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`);
-      } else {
-        execSync(`xdotool type --clearmodifiers -- ${JSON.stringify(text)}`);
-      }
-    } catch (error) {
-      log.error('TypeText error:', error);
-      throw error;
-    }
-  }
+// How long the target app gets to read the clipboard before we put the user's content back
+const CLIPBOARD_RESTORE_DELAY_MS = 250;
 
+export class PasteService {
   /**
    * Paste text via clipboard + Ctrl/Cmd+V simulation.
    * @param text - The text to paste.
@@ -33,6 +15,8 @@ export class PasteService {
    */
   async paste(text: string, heldModifiers?: { ctrlHeld?: boolean; shiftHeld?: boolean; altHeld?: boolean; metaHeld?: boolean }): Promise<void> {
     try {
+      const saved = this.saveClipboard();
+
       // Use Electron's clipboard API for proper Unicode support across all platforms
       clipboard.writeText(text);
 
@@ -64,9 +48,37 @@ export class PasteService {
           log.warn('xdotool not available on Linux. Text copied to clipboard but not pasted.');
         }
       }
+
+      await new Promise((resolve) => setTimeout(resolve, CLIPBOARD_RESTORE_DELAY_MS));
+      this.restoreClipboard(saved, text);
     } catch (error) {
       log.error('Paste error:', error);
       throw error;
     }
+  }
+
+  private saveClipboard() {
+    const image = clipboard.readImage();
+    return {
+      text: clipboard.readText(),
+      html: clipboard.readHTML(),
+      rtf: clipboard.readRTF(),
+      image: image.isEmpty() ? undefined : image,
+    };
+  }
+
+  // Put back what the user had copied — unless they copied something new in the meantime
+  private restoreClipboard(saved: ReturnType<PasteService['saveClipboard']>, pasted: string): void {
+    if (clipboard.readText() !== pasted) return;
+    if (!saved.text && !saved.html && !saved.rtf && !saved.image) {
+      clipboard.clear();
+      return;
+    }
+    clipboard.write({
+      text: saved.text || undefined,
+      html: saved.html || undefined,
+      rtf: saved.rtf || undefined,
+      image: saved.image,
+    });
   }
 }

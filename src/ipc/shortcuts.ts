@@ -8,10 +8,6 @@ export function registerShortcutHandlers(ctx: ServiceContext) {
     return { toggle: mgr.getToggleShortcut(), hold: mgr.getHoldShortcut() };
   });
 
-  ipcMain.handle('get-global-shortcut', () => {
-    return ctx.getShortcutManager().getToggleShortcut();
-  });
-
   ipcMain.handle('set-toggle-shortcut', (_event: IpcMainInvokeEvent, shortcut: string) => {
     log.debug(`Setting toggle shortcut to: ${shortcut}`);
     const mgr = ctx.getShortcutManager();
@@ -28,13 +24,5 @@ export function registerShortcutHandlers(ctx: ServiceContext) {
     ctx.getConfigService().setHoldShortcut(shortcut);
     mgr.refresh();
     return { success: true };
-  });
-
-  ipcMain.handle('update-global-shortcut', (_event: IpcMainInvokeEvent, shortcut: string) => {
-    log.debug(`Received request to update shortcut to: "${shortcut}"`);
-    const mgr = ctx.getShortcutManager();
-    mgr.setToggleShortcut(shortcut);
-    mgr.refresh();
-    return { success: true, shortcut, error: undefined };
   });
 }

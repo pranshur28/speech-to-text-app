@@ -91,6 +91,12 @@ export function registerDictionaryHandlers(ctx: ServiceContext) {
     }
   });
 
+  ipcMain.handle('dict:get-keyterms', () => {
+    const dict = ctx.getDictionaryService();
+    if (!dict) throw new Error('Dictionary service not initialized');
+    return { success: true, ...dict.getKeyterms() };
+  });
+
   ipcMain.handle('dict:get-stats', () => {
     const dict = ctx.getDictionaryService();
     if (!dict) throw new Error('Dictionary service not initialized');

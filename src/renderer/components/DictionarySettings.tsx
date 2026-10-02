@@ -21,6 +21,7 @@ export const DictionarySettings: React.FC = () => {
   const [isCaseSensitive, setIsCaseSensitive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [keyterms, setKeyterms] = useState<{ count: number; estimatedTokens: number; dropped: number } | null>(null);
 
   useEffect(() => {
     loadEntries();
@@ -29,9 +30,19 @@ export const DictionarySettings: React.FC = () => {
   const loadEntries = async () => {
     setIsLoading(true);
     try {
-      const result = await window.electronAPI.dictGetEntries();
+      const [result, keytermResult] = await Promise.all([
+        window.electronAPI.dictGetEntries(),
+        window.electronAPI.dictGetKeyterms(),
+      ]);
       if (result.success) {
         setEntries(result.entries);
+      }
+      if (keytermResult.success) {
+        setKeyterms({
+          count: keytermResult.terms.length,
+          estimatedTokens: keytermResult.estimatedTokens,
+          dropped: keytermResult.dropped,
+        });
       }
     } catch (err) {
       console.error('Error loading dictionary entries:', err);
@@ -144,7 +155,15 @@ export const DictionarySettings: React.FC = () => {
       </div>
       <div className="setting-description" style={{ marginBottom: '16px' }}>
         Define custom phrase replacements. When you say a phrase, it will be replaced with your custom text.
+        Enabled entries are also sent to Deepgram as keyterms so names and jargon are recognized correctly —
+        to just teach a word, add it with itself as the replacement (e.g. "Kubernetes" → "Kubernetes").
       </div>
+      {keyterms && keyterms.count > 0 && (
+        <div className="setting-description" style={{ marginBottom: '16px', color: keyterms.dropped ? 'var(--accent-warning)' : undefined }}>
+          {keyterms.count} keyterm{keyterms.count === 1 ? '' : 's'} sent to Deepgram (~{keyterms.estimatedTokens} of 450 tokens)
+          {keyterms.dropped > 0 && ` — ${keyterms.dropped} newer entr${keyterms.dropped === 1 ? 'y' : 'ies'} over the limit still apply as replacements but aren't sent as keyterms`}
+        </div>
+      )}
 
       {isLoading ? (
         <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>

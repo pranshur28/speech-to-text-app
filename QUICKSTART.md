@@ -1,17 +1,10 @@
 # Quick Start Guide
 
-## 1. Get Your API Keys
+## 1. Get Your Deepgram API Key
 
-### Deepgram (Real-time Streaming Transcription)
 1. Go to [Deepgram Console](https://console.deepgram.com/)
 2. Sign in or create an account
 3. Create a new API key
-4. Copy the key
-
-### OpenAI (Formatting + Fallback Transcription)
-1. Go to [OpenAI's API keys page](https://platform.openai.com/api-keys)
-2. Sign in or create an account
-3. Click "Create new secret key"
 4. Copy the key
 
 ## 2. Set Up the Project
@@ -22,12 +15,12 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and paste your OpenAI API key:
+Edit `.env` and paste your Deepgram API key:
 ```
-OPENAI_API_KEY=sk-your-key-here
+DEEPGRAM_API_KEY=your-key-here
 ```
 
-(You can also configure both keys in the app's Settings tab.)
+(You can also enter the key in the app's Settings tab.)
 
 ## 3. Run the App
 
@@ -41,39 +34,44 @@ This will:
 - Build the Electron main process
 - Launch the Electron app
 
+Code changes reload automatically — no need to build an installer to try them.
+
 ### Just the Dev Server (for testing React components)
 ```bash
 npm run dev
 ```
 
-## 4. Configure API Keys
+### Tests
+```bash
+npm test
+```
+Tests run inside Electron's Node.js so the native SQLite module loads without rebuilding.
+
+## 4. Configure Settings
 
 1. Open the app and switch to the **Settings** tab
-2. Enter your **Deepgram API Key** (for real-time streaming transcription)
-3. Enter your **OpenAI API Key** (for formatting and Whisper fallback)
-4. Keys are validated and saved locally
+2. Enter your **Deepgram API Key** and click Save
+3. Pick a **Transcription Model**:
+   - **Flux** (default) — pastes whole sentences, using Deepgram's end-of-turn detection
+   - **Nova-3** — formats numbers/dates and understands spoken "comma", "period", "new line", "new paragraph"
 
 ## 5. Using the App
 
 ### Push-to-Talk Mode (Recommended)
 - Configure a hold shortcut in Settings (e.g., `Ctrl+Shift+H`)
 - Hold the shortcut while speaking
-- Release to transcribe, format, and paste
+- Release to stop; the last words are flushed and pasted
 
 ### Toggle Mode
 - Press `Ctrl+Shift+Space` (or `Cmd+Shift+Space` on macOS) to start recording
-- Press again to stop
-- Text is transcribed via Deepgram, formatted by GPT-4o-mini, and pasted
-
-### File Upload Mode
-- Click "Choose Audio File"
-- Select an MP3, WAV, FLAC, or other audio file
-- The app will transcribe it via Whisper and format with GPT
+- Text is pasted into the focused app as you speak
+- Press again to stop; the full transcript is saved to History
 
 ### Custom Dictionary
 - Open the **Settings** tab → Dictionary section
 - Add phrase replacements (e.g., spoken "gonna" → replaced with "going to")
-- Replacements are applied automatically after AI formatting
+- Enabled entries are also sent to Deepgram as keyterms, improving recognition of names and jargon
+- To teach a word without changing it, add it with itself as the replacement
 
 ### Searching Your Notes
 - Switch to the **History** tab to browse transcriptions
@@ -94,10 +92,10 @@ npm install
 - On macOS: System Preferences → Security & Privacy → Microphone
 - On Windows: Settings → Privacy & Security → Microphone
 
-### API Key Issues
-- Verify your OpenAI key starts with `sk-`
-- Check you have API credits at https://platform.openai.com/account/billing/overview
-- Verify your Deepgram key at https://console.deepgram.com/
+### Deepgram Errors
+- The app shows the reason when it can't connect (invalid key, no internet, out of credit)
+- Verify your key and credit at https://console.deepgram.com/
+- A "400" error with many dictionary entries means the keyterm list was rejected — disable some entries
 
 ### Pasting Not Working
 - Grant accessibility permissions:
@@ -118,11 +116,9 @@ speech-to-text-app/
 │   ├── main.ts                          # Electron main process
 │   ├── preload.ts                       # Secure IPC bridge
 │   ├── services/
-│   │   ├── deepgram.ts                  # Deepgram WebSocket streaming
-│   │   ├── transcription.ts             # OpenAI Whisper integration
-│   │   ├── formatter.ts                 # GPT formatting logic
-│   │   ├── paste.ts                     # Text pasting to active window
-│   │   ├── dictionary.ts               # Custom phrase replacements
+│   │   ├── deepgram.ts                  # Deepgram Flux / Nova-3 WebSocket streaming
+│   │   ├── paste.ts                     # Text pasting to active window (restores clipboard)
+│   │   ├── dictionary.ts                # Phrase replacements + keyterms
 │   │   ├── database.ts                  # SQLite + FTS5 storage
 │   │   ├── search.ts                    # Search with query parsing
 │   │   └── config.ts                    # Configuration management
@@ -130,9 +126,15 @@ speech-to-text-app/
 │   │   └── shortcut-manager.ts          # Global keyboard hooks
 │   ├── ipc/                             # IPC handler modules
 │   └── renderer/
-│       ├── App.tsx                      # Main React component
+│       ├── App.tsx                      # Main React component (tabs + layout)
 │       ├── Overlay.tsx                  # Floating waveform overlay
+│       ├── recordingState.ts            # Recording state machine
+│       ├── hooks/
+│       │   └── useRecorder.ts           # Microphone + Deepgram session lifecycle
 │       └── components/
+│           ├── RecordingTab.tsx         # Record button, live transcript, recent history
+│           ├── SettingsTab.tsx          # API key, model, shortcuts, dictionary
+│           ├── ShortcutRecorder.tsx     # Shortcut capture control
 │           ├── SearchBar.tsx            # Debounced search
 │           ├── NoteList.tsx             # Virtualized note list
 │           ├── NoteCard.tsx             # Transcription card
@@ -143,6 +145,8 @@ speech-to-text-app/
 │           ├── TabBar.tsx               # Navigation tabs
 │           ├── ContextualFooter.tsx     # Action buttons
 │           └── ErrorBoundary.tsx        # Error handling
+├── scripts/
+│   └── jest-electron.js                 # Runs Jest under Electron's Node.js
 ├── electron-builder.yml                 # Build configuration
 ├── vite.config.ts                       # Vite configuration
 ├── tsconfig.json                        # TypeScript configuration
@@ -155,5 +159,5 @@ speech-to-text-app/
 For issues or questions:
 1. Check the [README.md](README.md) for detailed documentation
 2. Check [FEATURES.md](FEATURES.md) for feature details and roadmap
-3. Verify your API keys are valid
+3. Verify your Deepgram API key is valid
 4. Check system permissions for microphone and accessibility

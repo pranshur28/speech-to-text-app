@@ -16,21 +16,20 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 - **🎤 Multiple Recording Modes**
   - Toggle mode: Click button to start/stop
   - Push-to-Talk: Hold shortcut while speaking (with paste mode to prevent key state corruption)
-  - File upload: Transcribe existing audio files (mp3, wav, flac, ogg, aac, m4a)
   - Pause/resume during recording
   - Visual waveform overlay with stop/pause controls
 
-- **🤖 Dual Transcription Engines**
-  - **Deepgram Nova-3** (primary): Real-time streaming transcription via WebSocket with interim results, smart formatting, and 300ms endpointing
-  - **OpenAI Whisper** (fallback): Batch transcription for file uploads
-  - **GPT-4o-mini** for intelligent formatting with mathematical notation support (Unicode symbols, Greek letters, superscripts)
-  - Automatic punctuation, capitalization, paragraph breaks, and filler word removal
+- **🤖 Deepgram Streaming Transcription** (choose in Settings)
+  - **Flux** (default): Model-integrated end-of-turn detection, so text is pasted in whole sentences
+  - **Nova-3**: Smart formatting (numbers, dates) and spoken punctuation ("comma", "period", "new line", "new paragraph")
+  - Text is pasted live into the focused app; your clipboard is restored afterwards
+  - Clear error messages (and a desktop notification when the window is hidden) if Deepgram can't connect or the connection drops
 
 - **📖 Custom Dictionary**
   - Define custom phrase replacements (e.g., "gonna" → "going to")
-  - Case-sensitive or case-insensitive matching
+  - Whole-word matching, case-sensitive or case-insensitive
+  - Entries are also sent to Deepgram as **keyterms**, so names and jargon are recognized correctly in the first place
   - Enable/disable individual entries without deleting
-  - Applied automatically after formatting
 
 - **⚡ Global Shortcuts**
   - Customizable keyboard shortcuts (works even when app isn't focused)
@@ -81,7 +80,6 @@ See [FEATURES.md](FEATURES.md) for the complete feature roadmap including:
 - **Operating System**: macOS, Windows, or Linux
 - **API Keys**:
   - **Deepgram API key** (for real-time streaming transcription) — [Get one here](https://console.deepgram.com/)
-  - **OpenAI API key** (for formatting + fallback transcription) — [Get one here](https://platform.openai.com/api-keys)
 
 ### Installation
 
@@ -95,7 +93,7 @@ npm install
 
 # 3. Set up your API key (optional - can configure in app)
 cp .env.example .env
-# Edit .env and add: OPENAI_API_KEY=sk-your-key-here
+# Edit .env and add: DEEPGRAM_API_KEY=your-key-here
 ```
 
 ### Running the App
@@ -118,7 +116,7 @@ npm run dist
 ### First-Time Setup
 
 1. **Launch the app** — Run `npm run dev:electron`
-2. **Configure API Keys** — Open the Settings tab and add your Deepgram and OpenAI API keys
+2. **Configure API Key** — Open the Settings tab and add your Deepgram API key
 3. **Grant Permissions**:
    - **Microphone access** (for recording)
    - **Accessibility permissions** (for auto-paste on macOS)
@@ -127,21 +125,13 @@ npm run dist
 
 **Method 1: Toggle Mode (Default)**
 1. Press `Ctrl+Shift+Space` (or `Cmd+Shift+Space` on macOS)
-2. Speak naturally — you'll see real-time interim transcription via Deepgram
-3. Press the shortcut again to stop
-4. Text is formatted by GPT-4o-mini and pasted to the active window
+2. Speak naturally — text is pasted into the active window as each sentence/phrase is finalized
+3. Press the shortcut again to stop; the full transcript is saved to History
 
 **Method 2: Push-to-Talk Mode**
 1. Configure a hold shortcut in Settings
 2. Hold the shortcut while speaking
-3. Release to stop and process
-4. Text is automatically formatted and pasted
-
-**Method 3: File Upload**
-1. Click the file upload button
-2. Select an audio file
-3. Wait for transcription (via Whisper) and formatting
-4. Text is automatically pasted
+3. Release to stop; the last words are flushed and pasted
 
 ### Searching Your Notes
 
@@ -156,7 +146,8 @@ npm run dist
 - Add phrase replacements (e.g., spoken "gonna" → replaced with "going to")
 - Toggle case sensitivity per entry
 - Enable/disable entries without deleting them
-- Replacements are applied automatically after AI formatting
+- Enabled entries are sent to Deepgram as keyterms (up to ~450 tokens; the settings show how many)
+- To teach Deepgram a word without changing it, add it with itself as the replacement
 
 ---
 
@@ -166,8 +157,8 @@ npm run dist
 
 Access via the **Settings** tab:
 
-- **OpenAI API Key**: Required for formatting and Whisper fallback transcription
 - **Deepgram API Key**: Required for real-time streaming transcription
+- **Transcription Model**: Flux (default, whole-sentence pasting) or Nova-3 (smart formatting + spoken punctuation)
 - **Toggle Shortcut**: Customize the toggle recording shortcut (default: `Ctrl+Shift+Space`)
 - **Hold Shortcut**: Customize the push-to-talk shortcut
 - **Custom Dictionary**: Manage phrase replacements
@@ -216,8 +207,7 @@ npm run test:coverage
 
 ### What's Sent Externally
 - ⚠️ Audio stream (to Deepgram for real-time transcription)
-- ⚠️ Audio recordings (to OpenAI Whisper for file transcription)
-- ⚠️ Transcribed text (to OpenAI GPT-4o-mini for formatting)
+- ⚠️ Enabled dictionary terms (to Deepgram as keyterms)
 
 ### What's NOT Collected
 - ❌ No telemetry or analytics
@@ -268,10 +258,9 @@ System Preferences → Security & Privacy → Accessibility
 
 ### API Key Errors
 
-- ✅ Verify your OpenAI key starts with `sk-`
-- ✅ Check you have sufficient API credits at [OpenAI Platform](https://platform.openai.com/account/usage)
-- ✅ Verify your Deepgram key at [Deepgram Console](https://console.deepgram.com/)
-- ✅ Try re-entering the keys in Settings
+- ✅ Verify your Deepgram key and credit at [Deepgram Console](https://console.deepgram.com/)
+- ✅ Try re-entering the key in Settings
+- ✅ A "400" error with many dictionary entries means the keyterm list was rejected — disable some entries
 
 ### Database Issues
 
@@ -315,8 +304,6 @@ speech-to-text-app/
 │   │       └── ErrorBoundary.tsx        # React error boundary
 │   ├── services/                        # Business logic
 │   │   ├── deepgram.ts                  # Deepgram WebSocket streaming
-│   │   ├── transcription.ts             # OpenAI Whisper API
-│   │   ├── formatter.ts                 # GPT-4o-mini formatting
 │   │   ├── paste.ts                     # Cross-platform paste with modifier awareness
 │   │   ├── dictionary.ts               # Custom phrase replacements
 │   │   ├── database.ts                  # SQLite + FTS5
@@ -325,9 +312,7 @@ speech-to-text-app/
 │   ├── shortcuts/
 │   │   └── shortcut-manager.ts          # Global keyboard hooks with paste mode
 │   ├── ipc/                             # IPC handler modules
-│   │   ├── api-keys.ts                  # API key validation
-│   │   ├── audio-transcription.ts       # Transcribe/format/type operations
-│   │   ├── deepgram.ts                  # Streaming transcription handlers
+│   │   ├── deepgram.ts                  # Streaming sessions, live paste, key + model settings
 │   │   ├── dictionary.ts               # Dictionary CRUD handlers
 │   │   ├── database.ts                  # Database query handlers
 │   │   ├── overlay.ts                   # Overlay window control
@@ -351,8 +336,7 @@ speech-to-text-app/
 | **TypeScript 5.3** | Type-safe JavaScript |
 | **Vite 5** | Fast build tool |
 | **SQLite** (better-sqlite3) | Local database with FTS5 |
-| **Deepgram Nova-3** | Real-time streaming transcription |
-| **OpenAI API** | Whisper transcription + GPT-4o-mini formatting |
+| **Deepgram Flux / Nova-3** | Real-time streaming transcription |
 | **uiohook-napi** | Global keyboard shortcuts |
 | **@nut-tree-fork/nut-js** | Native keyboard simulation (Windows) |
 | **ws** | WebSocket client for Deepgram |
@@ -470,7 +454,7 @@ This project is open source and available under the **MIT License**.
 ## Acknowledgments
 
 - Built with [Electron](https://www.electronjs.org/)
-- Powered by [Deepgram](https://deepgram.com/) (Nova-3 streaming) and [OpenAI](https://openai.com/) (Whisper + GPT)
+- Powered by [Deepgram](https://deepgram.com/) (Flux and Nova-3 streaming)
 - UI built with [Radix UI](https://www.radix-ui.com/) primitives
 
 ---

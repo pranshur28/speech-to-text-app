@@ -14,9 +14,9 @@
     "preview": "vite preview",
     "start": "electron .",
     "dist": "npm run build && electron-builder",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test": "node scripts/jest-electron.js",
+    "test:watch": "node scripts/jest-electron.js --watch",
+    "test:coverage": "node scripts/jest-electron.js --coverage",
     "postinstall": "electron-rebuild -f -w better-sqlite3,uiohook-napi,@nut-tree-fork/libnut-win32"
   },
   "dependencies": {
@@ -32,7 +32,6 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.3.1",
     "electron-log": "^5.4.3",
-    "openai": "^4.28.0",
     "react-window": "^1.8.11",
     "uiohook-napi": "^1.5.4",
     "ws": "^8.19.0"

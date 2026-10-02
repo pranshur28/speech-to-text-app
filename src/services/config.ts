@@ -3,9 +3,11 @@ import fs from 'fs';
 import path from 'path';
 import log from '../utils/logger';
 
+export type SttEngine = 'flux' | 'nova-3';
+
 interface Config {
-  openaiApiKey?: string;
   deepgramApiKey?: string;
+  sttEngine?: SttEngine;
   toggleShortcut?: string;
   holdShortcut?: string;
 }
@@ -44,21 +46,6 @@ export class ConfigService {
     }
   }
 
-  getApiKey(): string | undefined {
-    // First check config file, then fall back to .env
-    return this.config.openaiApiKey || process.env.OPENAI_API_KEY;
-  }
-
-  setApiKey(apiKey: string): void {
-    this.config.openaiApiKey = apiKey;
-    this.save();
-  }
-
-  hasApiKey(): boolean {
-    const key = this.getApiKey();
-    return !!key && key.startsWith('sk-');
-  }
-
   getDefaultToggleShortcut(platform: string = process.platform): string {
     return platform === 'darwin' ? 'Command+Shift+Space' : 'Ctrl+Shift+Space';
   }
@@ -87,6 +74,15 @@ export class ConfigService {
 
   setDeepgramApiKey(key: string): void {
     this.config.deepgramApiKey = key;
+    this.save();
+  }
+
+  getSttEngine(): SttEngine {
+    return this.config.sttEngine === 'nova-3' ? 'nova-3' : 'flux';
+  }
+
+  setSttEngine(engine: SttEngine): void {
+    this.config.sttEngine = engine;
     this.save();
   }
 }

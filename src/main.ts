@@ -1,7 +1,5 @@
 import { app, BrowserWindow, Menu, Tray, nativeImage, MenuItemConstructorOptions } from 'electron';
 import path from 'path';
-import { TranscriptionService } from './services/transcription';
-import { TextFormatter } from './services/formatter';
 import { PasteService } from './services/paste';
 import { ConfigService } from './services/config';
 import { DatabaseService } from './services/database';
@@ -10,9 +8,7 @@ import { DictionaryService } from './services/dictionary';
 import { DeepgramStreamingService } from './services/deepgram';
 import { ShortcutManager } from './shortcuts/shortcut-manager';
 import { ServiceContext } from './ipc/types';
-import { registerApiKeyHandlers } from './ipc/api-keys';
 import { registerShortcutHandlers } from './ipc/shortcuts';
-import { registerAudioTranscriptionHandlers } from './ipc/audio-transcription';
 import { registerOverlayHandlers } from './ipc/overlay';
 import { registerDatabaseHandlers } from './ipc/database';
 import { registerDictionaryHandlers } from './ipc/dictionary';
@@ -27,8 +23,6 @@ let configService: ConfigService;
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
-let transcriptionService: TranscriptionService | null = null;
-let textFormatter: TextFormatter | null = null;
 let pasteService: PasteService | null = null;
 let databaseService: DatabaseService | null = null;
 let searchService: SearchService | null = null;
@@ -196,19 +190,19 @@ const createMenu = () => {
 };
 
 app.on('ready', () => {
+  // Windows only shows notifications for apps with an AppUserModelID (matches electron-builder appId)
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.speechtotext.app');
+  }
+
   // Initialize config service
   configService = new ConfigService();
 
-  const apiKey = configService.getApiKey() || '';
-  if (!apiKey) {
-    log.warn('No API key configured. Please add your API key in Settings.');
-  } else if (!apiKey.startsWith('sk-')) {
-    log.warn('Invalid API key format. API keys should start with "sk-".');
+  if (!configService.getDeepgramApiKey()) {
+    log.warn('No Deepgram API key configured. Please add it in Settings.');
   }
 
   // Initialize services
-  transcriptionService = new TranscriptionService(apiKey);
-  textFormatter = new TextFormatter(apiKey);
   pasteService = new PasteService();
   databaseService = new DatabaseService();
   searchService = new SearchService(databaseService);
@@ -224,24 +218,18 @@ app.on('ready', () => {
     getMainWindow: () => mainWindow,
     getOverlayWindow: () => overlayWindow,
     getConfigService: () => configService,
-    getTranscriptionService: () => transcriptionService,
-    getTextFormatter: () => textFormatter,
     getPasteService: () => pasteService,
     getDatabaseService: () => databaseService,
     getSearchService: () => searchService,
     getDictionaryService: () => dictionaryService,
     getDeepgramService: () => deepgramService,
     setDeepgramService: (svc) => { deepgramService = svc; },
-    setTranscriptionService: (svc) => { transcriptionService = svc; },
-    setTextFormatter: (svc) => { textFormatter = svc; },
     getShortcutManager: () => shortcutManager,
     createOverlayWindow,
   };
 
   // Register all IPC handlers
-  registerApiKeyHandlers(ctx);
   registerShortcutHandlers(ctx);
-  registerAudioTranscriptionHandlers(ctx);
   registerOverlayHandlers(ctx);
   registerDatabaseHandlers(ctx);
   registerDictionaryHandlers(ctx);

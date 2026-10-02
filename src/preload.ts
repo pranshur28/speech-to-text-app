@@ -1,13 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+export type SttEngine = 'flux' | 'nova-3';
+
 export interface IElectronAPI {
-  transcribeAudio: (audioBuffer: ArrayBuffer) => Promise<{ success: boolean; transcript: string }>;
-  formatText: (text: string) => Promise<{ success: boolean; formatted: string }>;
-  transcribeAndTypeSegment: (audioBuffer: ArrayBuffer) => Promise<{ success: boolean; transcript: string; formatted: string }>;
-  formatAndTypeStream: (rawText: string) => Promise<{ success: boolean; formatted: string }>;
-  onStreamChunk: (callback: (chunk: string) => void) => () => void;
-  pasteText: (text: string) => Promise<{ success: boolean }>;
-  selectAudioFile: () => Promise<{ cancelled: boolean; filePath: string | null }>;
   onToggleRecording: (callback: () => void) => () => void;
   onStartRecording: (callback: () => void) => () => void;
   onStopRecording: (callback: () => void) => () => void;
@@ -21,9 +16,6 @@ export interface IElectronAPI {
   onAudioData: (callback: (data: any) => void) => () => void;
   overlayAction: (action: 'stop' | 'pause' | 'resume') => void;
   setOverlayInteractive: (interactive: boolean) => void;
-  getApiKeyStatus: () => Promise<{ valid: boolean; error: string | null }>;
-  getApiKey: () => Promise<string>;
-  saveApiKey: (apiKey: string) => Promise<{ success: boolean; error: string | null }>;
   // Database API
   dbSaveTranscription: (data: any) => Promise<{ success: boolean; id: number }>;
   dbGetTranscription: (id: number) => Promise<{ success: boolean; transcription: any }>;
@@ -43,27 +35,22 @@ export interface IElectronAPI {
   dictToggleEnabled: (id: number) => Promise<{ success: boolean }>;
   dictApplyReplacements: (text: string) => Promise<{ success: boolean; result: string }>;
   dictGetStats: () => Promise<{ success: boolean; stats: { total: number; enabled: number } }>;
+  dictGetKeyterms: () => Promise<{ success: boolean; terms: string[]; estimatedTokens: number; dropped: number }>;
   // Deepgram Streaming API
   deepgramStartSession: () => Promise<{ success: boolean; error?: string }>;
   deepgramSendAudioChunk: (data: ArrayBuffer) => void;
-  deepgramStopSession: () => Promise<{ success: boolean; transcript: string; formatted: string }>;
+  deepgramStopSession: () => Promise<{ success: boolean; transcript: string; formatted: string; error?: string }>;
+  deepgramCancelSession: () => Promise<{ success: boolean }>;
   onDeepgramTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => () => void;
+  onDeepgramConnectionLost: (callback: (data: { message: string }) => void) => () => void;
+  getDeepgramKeyStatus: () => Promise<{ configured: boolean }>;
   getDeepgramApiKey: () => Promise<string>;
   saveDeepgramApiKey: (key: string) => Promise<{ success: boolean; error: string | null }>;
+  getSttEngine: () => Promise<SttEngine>;
+  setSttEngine: (engine: SttEngine) => Promise<{ success: boolean }>;
 }
 
 const electronAPI: IElectronAPI = {
-  transcribeAudio: (audioBuffer: ArrayBuffer) => ipcRenderer.invoke('transcribe-audio', audioBuffer),
-  formatText: (text: string) => ipcRenderer.invoke('format-text', text),
-  transcribeAndTypeSegment: (audioBuffer: ArrayBuffer) => ipcRenderer.invoke('transcribe-and-type-segment', audioBuffer),
-  formatAndTypeStream: (rawText: string) => ipcRenderer.invoke('format-and-type-stream', rawText),
-  onStreamChunk: (callback: (chunk: string) => void) => {
-    const handler = (_event: any, chunk: string) => callback(chunk);
-    ipcRenderer.on('stream-chunk', handler);
-    return () => ipcRenderer.removeListener('stream-chunk', handler);
-  },
-  pasteText: (text: string) => ipcRenderer.invoke('paste-text', text),
-  selectAudioFile: () => ipcRenderer.invoke('select-audio-file'),
   onToggleRecording: (callback: () => void) => {
     ipcRenderer.on('toggle-recording', callback);
     return () => ipcRenderer.removeListener('toggle-recording', callback);
@@ -96,9 +83,6 @@ const electronAPI: IElectronAPI = {
   },
   overlayAction: (action: 'stop' | 'pause' | 'resume') => ipcRenderer.send('overlay-action', action),
   setOverlayInteractive: (interactive: boolean) => ipcRenderer.send('set-overlay-interactive', interactive),
-  getApiKeyStatus: () => ipcRenderer.invoke('get-api-key-status'),
-  getApiKey: () => ipcRenderer.invoke('get-api-key'),
-  saveApiKey: (apiKey: string) => ipcRenderer.invoke('save-api-key', apiKey),
   // Database API
   dbSaveTranscription: (data: any) => ipcRenderer.invoke('db:save-transcription', data),
   dbGetTranscription: (id: number) => ipcRenderer.invoke('db:get-transcription', id),
@@ -118,17 +102,27 @@ const electronAPI: IElectronAPI = {
   dictToggleEnabled: (id: number) => ipcRenderer.invoke('dict:toggle-enabled', id),
   dictApplyReplacements: (text: string) => ipcRenderer.invoke('dict:apply-replacements', text),
   dictGetStats: () => ipcRenderer.invoke('dict:get-stats'),
+  dictGetKeyterms: () => ipcRenderer.invoke('dict:get-keyterms'),
   // Deepgram Streaming API
   deepgramStartSession: () => ipcRenderer.invoke('deepgram:start-session'),
   deepgramSendAudioChunk: (data: ArrayBuffer) => ipcRenderer.send('deepgram:audio-chunk', data),
   deepgramStopSession: () => ipcRenderer.invoke('deepgram:stop-session'),
+  deepgramCancelSession: () => ipcRenderer.invoke('deepgram:cancel-session'),
   onDeepgramTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => {
     const handler = (_event: any, data: { text: string; isFinal: boolean }) => callback(data);
     ipcRenderer.on('deepgram:transcript', handler);
     return () => ipcRenderer.removeListener('deepgram:transcript', handler);
   },
+  onDeepgramConnectionLost: (callback: (data: { message: string }) => void) => {
+    const handler = (_event: any, data: { message: string }) => callback(data);
+    ipcRenderer.on('deepgram:connection-lost', handler);
+    return () => ipcRenderer.removeListener('deepgram:connection-lost', handler);
+  },
+  getDeepgramKeyStatus: () => ipcRenderer.invoke('get-deepgram-key-status'),
   getDeepgramApiKey: () => ipcRenderer.invoke('get-deepgram-api-key'),
   saveDeepgramApiKey: (key: string) => ipcRenderer.invoke('save-deepgram-api-key', key),
+  getSttEngine: () => ipcRenderer.invoke('get-stt-engine'),
+  setSttEngine: (engine: SttEngine) => ipcRenderer.invoke('set-stt-engine', engine),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
