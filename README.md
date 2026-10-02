@@ -17,7 +17,7 @@ A powerful, polished note-taking companion that transforms speech into searchabl
   - Toggle mode: Click button to start/stop
   - Push-to-Talk: Hold shortcut while speaking (with paste mode to prevent key state corruption)
   - Pause/resume during recording
-  - Visual waveform overlay with stop/pause controls
+  - Recording pill: status dot + live level bars; hover to reveal the timer and pause/stop (hidden in hold-to-talk). Shows Connecting / Paused / Finishing states and appears on the monitor your mouse is on
 
 - **🤖 Deepgram Streaming Transcription** (choose in Settings)
   - **Flux** (default): Model-integrated end-of-turn detection, so text is pasted in whole sentences
@@ -57,7 +57,7 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 
 - **🎨 Visual Feedback**
   - Real-time audio waveform visualization (12-bar display)
-  - Always-on-top overlay with click-through design
+  - Always-on-top, click-through pill that never takes focus from the app you are dictating into
   - Status indicators (Ready, Starting, Recording, Paused, Processing)
   - Color-coded waveform bars (green → yellow → red by intensity)
   - Dark theme with modern UI using Radix UI components

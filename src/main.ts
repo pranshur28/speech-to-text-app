@@ -9,7 +9,7 @@ import { DeepgramStreamingService } from './services/deepgram';
 import { ShortcutManager } from './shortcuts/shortcut-manager';
 import { ServiceContext } from './ipc/types';
 import { registerShortcutHandlers } from './ipc/shortcuts';
-import { registerOverlayHandlers } from './ipc/overlay';
+import { registerOverlayHandlers, positionOverlayWindow, OVERLAY_WIDTH, OVERLAY_HEIGHT } from './ipc/overlay';
 import { registerDatabaseHandlers } from './ipc/database';
 import { registerDictionaryHandlers } from './ipc/dictionary';
 import { registerDeepgramHandlers } from './ipc/deepgram';
@@ -85,10 +85,7 @@ const createWindow = () => {
   });
 };
 
-// Overlay: waveform pill with pause/stop controls
-const OVERLAY_WIDTH = 240;
-const OVERLAY_HEIGHT = 65;
-
+// Overlay: recording pill near the bottom of the screen
 const createOverlayWindow = () => {
   overlayWindow = new BrowserWindow({
     width: OVERLAY_WIDTH,
@@ -104,18 +101,16 @@ const createOverlayWindow = () => {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
+    // Clicking pause/stop must never take focus away from the app you're dictating into
+    focusable: false,
     show: false,
     x: 0,
     y: 0
   });
 
-  // Bottom-center of the primary display's work area (respects taskbar position)
-  const { screen } = require('electron');
-  const { x, y, width, height } = screen.getPrimaryDisplay().workArea;
-  overlayWindow.setPosition(
-    Math.round(x + width / 2 - OVERLAY_WIDTH / 2),
-    Math.round(y + height - OVERLAY_HEIGHT - 8)
-  );
+  // Keep above full-screen windows and other always-on-top apps
+  overlayWindow.setAlwaysOnTop(true, 'screen-saver');
+  positionOverlayWindow(overlayWindow);
 
   const isDev = !app.isPackaged;
   const startUrl = isDev

@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef } from 'react';
 import { initialRecordingState, recordingReducer } from '../recordingState';
+import type { OverlayPhase } from '../../preload';
 
 // Deepgram recommends ~80ms audio chunks for Flux; works equally well for Nova-3
 const AUDIO_TIMESLICE_MS = 80;
@@ -43,10 +44,15 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const audioDataIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Hold-to-talk sessions show the pill without pause/stop buttons
+  const holdModeRef = useRef(false);
   // Audio chunks are forwarded in order; stop waits for the last one before finalizing
   const sendChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const resetLater = (ms: number) => setTimeout(() => dispatch({ type: 'RESET' }), ms);
+
+  const showOverlay = (phase: OverlayPhase) =>
+    window.electronAPI.setOverlayState({ phase, holdMode: holdModeRef.current });
 
   const fail = (status: string, errorMessage: string) => {
     dispatch({ type: 'ERROR', status, errorMessage });
@@ -107,15 +113,18 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     audioDataIntervalRef.current = setInterval(sendAudioData, 16);
   };
 
-  const startRecording = async () => {
+  const startRecording = async ({ holdMode = false }: { holdMode?: boolean } = {}) => {
     dispatch({ type: 'START_REQUESTED' });
     pendingStopRef.current = false;
+    holdModeRef.current = holdMode;
+    showOverlay('connecting');
 
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (error) {
       pendingStopRef.current = false;
+      showOverlay('hidden');
       fail('Mic Error', 'Could not access the microphone.');
       return;
     }
@@ -125,6 +134,7 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     if (!dgResult.success) {
       stream.getTracks().forEach((track) => track.stop());
       pendingStopRef.current = false;
+      showOverlay('hidden');
       fail('Error', dgResult.error || 'Could not connect to Deepgram.');
       return;
     }
@@ -149,7 +159,7 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     mediaRecorderRef.current = mediaRecorder;
     mediaRecorder.start(AUDIO_TIMESLICE_MS);
     dispatch({ type: 'RECORDING_STARTED' });
-    window.electronAPI.setOverlayVisible(true);
+    showOverlay('listening');
 
     if (pendingStopRef.current) {
       pendingStopRef.current = false;
@@ -168,7 +178,7 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     mediaRecorder.stop();
 
     dispatch({ type: 'STOP_PROCESSING' });
-    window.electronAPI.setOverlayVisible(false);
+    showOverlay('finishing');
 
     try {
       // Make sure the final audio chunk reaches Deepgram before asking it to finalize
@@ -196,6 +206,8 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     } catch (error: any) {
       releaseMicrophone();
       fail('Error', interruption || describeStopError(error));
+    } finally {
+      showOverlay('hidden');
     }
   };
 
@@ -203,12 +215,14 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') return;
     mediaRecorderRef.current.pause();
     dispatch({ type: 'PAUSE' });
+    showOverlay('paused');
   };
 
   const resumeRecording = () => {
     if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'paused') return;
     mediaRecorderRef.current.resume();
     dispatch({ type: 'RESUME' });
+    showOverlay('listening');
   };
 
   const cancelRecording = () => {
@@ -219,7 +233,7 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     window.electronAPI.deepgramCancelSession();
 
     dispatch({ type: 'CANCEL' });
-    window.electronAPI.setOverlayVisible(false);
+    showOverlay('hidden');
 
     resetLater(1500);
   };
@@ -237,7 +251,7 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
 
     const unsubStart = window.electronAPI.onStartRecording(() => {
       if (stateRef.current.phase !== 'ready') return;
-      startRecording();
+      startRecording({ holdMode: true });
     });
 
     const unsubStop = window.electronAPI.onStopRecording(() => {
@@ -283,7 +297,7 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     isRecording: state.phase === 'recording' || state.phase === 'paused',
     isPaused: state.phase === 'paused',
     isProcessing: state.phase === 'processing',
-    startRecording,
+    startRecording: (options?: { holdMode?: boolean }) => startRecording(options),
     stopRecording: () => stopRecording(),
     cancelRecording,
     showError: (errorMessage: string) => dispatch({ type: 'ERROR', status: 'Ready', errorMessage }),

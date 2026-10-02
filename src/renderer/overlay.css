@@ -1,116 +1,225 @@
-.overlay-container {
+/* Recording pill — a single solid capsule. A transparent window can't blur the desktop
+   behind it, so the surface is near-opaque instead of frosted. */
+
+.overlay-root {
+    --pill-bg: rgba(22, 22, 26, 0.96);
+    --pill-border: rgba(255, 255, 255, 0.09);
+    --pill-text: rgba(255, 255, 255, 0.92);
+    --pill-muted: rgba(255, 255, 255, 0.62);
+    --rec: #ef4444;
+    --paused: #f59e0b;
+    --idle: #a1a1aa;
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+
     display: flex;
+    align-items: center;
     justify-content: center;
-    align-items: center;
-    height: 100vh;
     width: 100vw;
+    height: 100vh;
+    font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    user-select: none;
 }
 
-
-/* Chromeless container - no background, just layout */
-.overlay-pill {
+.pill {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 4px 0;
+    height: 36px;
+    padding: 0 14px 0 13px;
+    background: var(--pill-bg);
+    border: 1px solid var(--pill-border);
+    border-radius: 999px;
+    /* Kept within the window's transparent margin so it never gets clipped */
+    box-shadow:
+        0 4px 14px rgba(0, 0, 0, 0.34),
+        0 1px 3px rgba(0, 0, 0, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    color: var(--pill-text);
+
+    /* Enter/exit */
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+    transition:
+        opacity 160ms var(--ease),
+        transform 180ms var(--ease),
+        padding 200ms var(--ease);
 }
 
-.waveform-capsule {
+.pill.is-shown {
+    opacity: 1;
+    transform: none;
+}
+
+.pill.is-expanded.has-controls {
+    padding-right: 5px;
+}
+
+/* ---- Status indicator ---- */
+
+.pill-indicator {
+    display: grid;
+    place-items: center;
+    width: 10px;
+    height: 10px;
+    margin-right: 11px;
+    flex-shrink: 0;
+}
+
+.pill-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--idle);
+    transition: background 200ms var(--ease);
+}
+
+.pill--listening .pill-dot {
+    background: var(--rec);
+    animation: pill-rec 1.6s ease-in-out infinite;
+}
+
+.pill--connecting .pill-dot {
+    animation: pill-blink 1s ease-in-out infinite;
+}
+
+.pill--paused .pill-dot {
+    background: var(--paused);
+}
+
+.pill-spinner {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--pill-text);
+    animation: pill-spin 0.7s linear infinite;
+}
+
+/* ---- Level bars ---- */
+
+.pill-bars {
     display: flex;
     align-items: center;
     gap: 2px;
-    padding: 6px 10px;
-    height: 30px;
-    background: rgba(10, 10, 10, 0.8);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow:
-        0 2px 12px rgba(0, 0, 0, 0.5),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    height: 18px;
 }
 
-.eq-bar {
+.pill-bar {
     width: 3px;
-    min-height: 4px;
-    border-radius: 1.5px;
-    transition: height 0.06s ease-out;
-    box-shadow: 0 0 4px currentColor;
+    height: 18px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.88);
+    transform: scaleY(0.14);
+    will-change: transform;
 }
 
-.eq-bar.paused {
-    background-color: rgba(100, 100, 100, 0.4) !important;
-    box-shadow: none;
+.pill--paused .pill-bar,
+.pill--finishing .pill-bar {
+    background: rgba(255, 255, 255, 0.35);
 }
 
-/* Floating control buttons container */
-.overlay-controls {
+/* ---- Hover reveal: timer + controls ---- */
+
+.pill-extra {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    background: rgba(20, 20, 20, 0.85);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border-radius: 18px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow:
-        0 4px 16px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition:
+        max-width 220ms var(--ease),
+        opacity 160ms var(--ease);
 }
 
-.overlay-btn {
+.pill.is-expanded .pill-extra {
+    max-width: 160px;
+    opacity: 1;
+}
+
+.pill-timer {
+    margin-left: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    color: var(--pill-muted);
+    white-space: nowrap;
+}
+
+.pill--paused .pill-timer {
+    color: var(--paused);
+}
+
+.pill-divider {
+    width: 1px;
+    height: 16px;
+    margin: 0 6px 0 12px;
+    background: rgba(255, 255, 255, 0.12);
+    flex-shrink: 0;
+}
+
+.pill-btn {
+    display: grid;
+    place-items: center;
     width: 26px;
     height: 26px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    color: #ffffff;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
     padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--pill-text);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 120ms var(--ease), color 120ms var(--ease);
 }
 
-.overlay-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.25);
-    transform: scale(1.1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.overlay-btn:active {
-    transform: scale(0.95);
-}
-
-.overlay-btn svg {
+.pill-btn svg {
     width: 12px;
     height: 12px;
+    fill: currentColor;
 }
 
-.overlay-btn.stop-btn:hover {
-    background: rgba(239, 68, 68, 0.5);
-    border-color: rgba(239, 68, 68, 0.6);
-    box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+.pill-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
 }
 
-.overlay-btn.pause-btn:hover {
-    background: rgba(245, 158, 11, 0.5);
-    border-color: rgba(245, 158, 11, 0.6);
-    box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+.pill-btn:active {
+    background: rgba(255, 255, 255, 0.16);
 }
 
-.overlay-btn.pause-btn.paused {
-    background: rgba(16, 185, 129, 0.35);
-    border-color: rgba(16, 185, 129, 0.5);
+.pill-btn--stop:hover {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
 }
 
-.overlay-btn.pause-btn.paused:hover {
-    background: rgba(16, 185, 129, 0.5);
-    box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+.pill-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.6);
+    outline-offset: 1px;
+}
+
+/* ---- Motion ---- */
+
+@keyframes pill-rec {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+    50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+}
+
+@keyframes pill-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+@keyframes pill-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pill,
+    .pill-extra {
+        transition-duration: 0.01ms;
+    }
+
+    .pill-dot,
+    .pill-spinner {
+        animation: none !important;
+    }
 }

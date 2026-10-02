@@ -2,6 +2,14 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 export type SttEngine = 'flux' | 'nova-3';
 
+export type OverlayPhase = 'hidden' | 'connecting' | 'listening' | 'paused' | 'finishing';
+
+export interface OverlayState {
+  phase: OverlayPhase;
+  /** Hold-to-talk: releasing the key stops, so the pill shows no pause/stop buttons. */
+  holdMode: boolean;
+}
+
 export interface IElectronAPI {
   onToggleRecording: (callback: () => void) => () => void;
   onStartRecording: (callback: () => void) => () => void;
@@ -11,12 +19,13 @@ export interface IElectronAPI {
   getShortcuts: () => Promise<{ toggle: string; hold: string }>;
   setToggleShortcut: (shortcut: string) => Promise<{ success: boolean }>;
   setHoldShortcut: (shortcut: string) => Promise<{ success: boolean }>;
-  setOverlayVisible: (visible: boolean) => void;
+  setOverlayState: (state: OverlayState) => void;
   sendAudioData: (data: any) => void;
   onAudioData: (callback: (data: any) => void) => () => void;
   overlayAction: (action: 'stop' | 'pause' | 'resume') => void;
   setOverlayInteractive: (interactive: boolean) => void;
-  onOverlayReset: (callback: () => void) => () => void;
+  onOverlayState: (callback: (state: OverlayState) => void) => () => void;
+  overlayReady: () => void;
   // Database API
   dbSaveTranscription: (data: any) => Promise<{ success: boolean; id: number }>;
   dbGetTranscription: (id: number) => Promise<{ success: boolean; transcription: any }>;
@@ -78,7 +87,7 @@ const electronAPI: IElectronAPI = {
   getShortcuts: () => ipcRenderer.invoke('get-shortcuts'),
   setToggleShortcut: (shortcut: string) => ipcRenderer.invoke('set-toggle-shortcut', shortcut),
   setHoldShortcut: (shortcut: string) => ipcRenderer.invoke('set-hold-shortcut', shortcut),
-  setOverlayVisible: (visible: boolean) => ipcRenderer.send('set-overlay-visible', visible),
+  setOverlayState: (state: OverlayState) => ipcRenderer.send('overlay:set-state', state),
   sendAudioData: (data: any) => ipcRenderer.send('audio-data', data),
   onAudioData: (callback: (data: any) => void) => {
     const handler = (_event: any, data: any) => callback(data);
@@ -87,11 +96,12 @@ const electronAPI: IElectronAPI = {
   },
   overlayAction: (action: 'stop' | 'pause' | 'resume') => ipcRenderer.send('overlay-action', action),
   setOverlayInteractive: (interactive: boolean) => ipcRenderer.send('set-overlay-interactive', interactive),
-  onOverlayReset: (callback: () => void) => {
-    const handler = () => callback();
-    ipcRenderer.on('overlay:reset', handler);
-    return () => ipcRenderer.removeListener('overlay:reset', handler);
+  onOverlayState: (callback: (state: OverlayState) => void) => {
+    const handler = (_event: any, state: OverlayState) => callback(state);
+    ipcRenderer.on('overlay:state', handler);
+    return () => ipcRenderer.removeListener('overlay:state', handler);
   },
+  overlayReady: () => ipcRenderer.send('overlay:ready'),
   // Database API
   dbSaveTranscription: (data: any) => ipcRenderer.invoke('db:save-transcription', data),
   dbGetTranscription: (id: number) => ipcRenderer.invoke('db:get-transcription', id),

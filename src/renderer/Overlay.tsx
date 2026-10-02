@@ -1,128 +1,193 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './overlay.css';
+import { formatElapsed } from './format';
+import type { OverlayPhase, OverlayState } from '../preload';
 
-const BAR_COUNT = 12;
+// Odd count so there's a center bar; low (voice) frequencies sit in the middle, mirrored outward
+const BAR_COUNT = 13;
+const CENTER = (BAR_COUNT - 1) / 2;
+const MIN_SCALE = 0.14;
+
+// Smoothing: rise quickly with the voice, fall slowly so bars don't flicker
+const ATTACK = 0.45;
+const RELEASE = 0.12;
+
+const PHASE_LABELS: Record<OverlayPhase, string> = {
+  hidden: '',
+  connecting: 'Connecting',
+  listening: 'Recording',
+  paused: 'Paused',
+  finishing: 'Finishing',
+};
 
 export default function Overlay() {
-    const [waveform, setWaveform] = useState<number[]>(new Array(BAR_COUNT).fill(0));
-    const [isPaused, setIsPaused] = useState(false);
-    const isPausedRef = useRef(false);
+  const [state, setState] = useState<OverlayState>({ phase: 'hidden', holdMode: false });
+  const [expanded, setExpanded] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
 
-    // Keep ref in sync with state
-    useEffect(() => {
-        isPausedRef.current = isPaused;
-    }, [isPaused]);
+  const phaseRef = useRef<OverlayPhase>('hidden');
+  const targets = useRef(new Float32Array(BAR_COUNT));
+  const levels = useRef(new Float32Array(BAR_COUNT));
+  const barRefs = useRef<Array<HTMLSpanElement | null>>([]);
 
-    useEffect(() => {
-        // Make body transparent for overlay window
-        document.body.style.background = 'transparent';
+  useEffect(() => {
+    phaseRef.current = state.phase;
+    if (state.phase === 'hidden') setExpanded(false);
+  }, [state.phase]);
 
-        // Audio levels from the main app
-        const unsubAudio = window.electronAPI.onAudioData((data: any) => {
-            if (data?.waveform && !isPausedRef.current) {
-                setWaveform(data.waveform.slice(0, BAR_COUNT));
-            }
-        });
+  // State and audio levels from the main app
+  useEffect(() => {
+    document.body.style.background = 'transparent';
 
-        // New recording: clear the previous session's pause state and levels
-        const unsubReset = window.electronAPI.onOverlayReset(() => {
-            setIsPaused(false);
-            setWaveform(new Array(BAR_COUNT).fill(0));
-        });
+    const unsubState = window.electronAPI.onOverlayState((next) => {
+      // A new session starts the clock from zero
+      if (next.phase === 'connecting' && phaseRef.current !== 'connecting') setElapsed(0);
+      phaseRef.current = next.phase;
+      setState(next);
+    });
 
-        return () => {
-            unsubAudio();
-            unsubReset();
-        };
-    }, []);
+    const unsubAudio = window.electronAPI.onAudioData((data: any) => {
+      const waveform: number[] | undefined = data?.waveform;
+      if (!waveform) return;
+      for (let i = 0; i < BAR_COUNT; i++) {
+        // Skip bin 0 (DC); spread the next bands from the center outward
+        const band = Math.min(waveform.length - 1, Math.round(Math.abs(i - CENTER)) + 1);
+        const value = waveform[band] || 0;
+        targets.current[i] = Math.min(1, Math.pow(value, 1.3) * 1.25);
+      }
+    });
 
-    // Handle mouse enter/leave for enabling/disabling click-through
-    const handleMouseEnterInteractive = () => {
-        window.electronAPI.setOverlayInteractive(true);
+    // Ask for the current state in case it was sent before this page loaded
+    window.electronAPI.overlayReady();
+
+    return () => {
+      unsubState();
+      unsubAudio();
+    };
+  }, []);
+
+  // Recording clock — only runs while actually listening
+  useEffect(() => {
+    if (state.phase !== 'listening') return;
+    let last = performance.now();
+    const interval = setInterval(() => {
+      const now = performance.now();
+      setElapsed((value) => value + (now - last));
+      last = now;
+    }, 250);
+    return () => clearInterval(interval);
+  }, [state.phase]);
+
+  // Bar animation, written straight to the DOM each frame (no React re-render per frame)
+  useEffect(() => {
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    let frame = 0;
+    const start = performance.now();
+
+    const tick = (now: number) => {
+      const t = (now - start) / 1000;
+      const phase = phaseRef.current;
+
+      for (let i = 0; i < BAR_COUNT; i++) {
+        let target = targets.current[i];
+        if (phase === 'connecting') {
+          // A soft wave travelling across the bars while we connect
+          target = reduceMotion ? 0.2 : 0.18 + 0.22 * Math.max(0, Math.sin(t * 6 - i * 0.55));
+        } else if (phase !== 'listening') {
+          target = 0;
+        } else if (target < 0.05 && !reduceMotion) {
+          // Silence: a gentle breathing motion so the pill reads as "alive"
+          target = 0.05 + 0.035 * (1 + Math.sin(t * 2.4 - Math.abs(i - CENTER) * 0.6));
+        }
+
+        const current = levels.current[i];
+        const next = current + (target - current) * (target > current ? ATTACK : RELEASE);
+        levels.current[i] = next;
+
+        const bar = barRefs.current[i];
+        if (bar) {
+          const scale = MIN_SCALE + (1 - MIN_SCALE) * Math.min(1, next);
+          bar.style.transform = `scaleY(${scale.toFixed(3)})`;
+        }
+      }
+      frame = requestAnimationFrame(tick);
     };
 
-    const handleMouseLeaveInteractive = () => {
-        window.electronAPI.setOverlayInteractive(false);
-    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
-    const handleStop = () => {
-        window.electronAPI.overlayAction('stop');
-    };
+  const { phase, holdMode } = state;
+  const showControls = !holdMode && (phase === 'listening' || phase === 'paused');
+  const timeText = formatElapsed(elapsed);
 
-    const handlePause = () => {
-        setIsPaused(!isPaused);
-        window.electronAPI.overlayAction(isPaused ? 'resume' : 'pause');
-    };
+  // Hovering the pill makes it clickable and reveals the timer and controls
+  const handleMouseEnter = () => {
+    setExpanded(true);
+    window.electronAPI.setOverlayInteractive(true);
+  };
 
-    return (
-        <div className="overlay-container">
-            <div className="overlay-pill">
-                <div className="waveform-capsule">
-                    {waveform.map((value, index) => {
-                        const centerIndex = waveform.length / 2;
-                        const distanceFromCenter = Math.abs(index - centerIndex + 0.5);
-                        const mirrorIndex = index < centerIndex
-                            ? Math.floor(centerIndex - distanceFromCenter)
-                            : Math.floor(centerIndex + distanceFromCenter - 1);
-                        const mirroredValue = waveform[Math.min(mirrorIndex, waveform.length - 1)];
+  const handleMouseLeave = () => {
+    setExpanded(false);
+    window.electronAPI.setOverlayInteractive(false);
+  };
 
-                        const height = isPaused ? 4 : 4 + mirroredValue * 22;
-                        const intensity = isPaused ? 0 : mirroredValue;
+  return (
+    <div className="overlay-root">
+      <div
+        className={[
+          'pill',
+          `pill--${phase}`,
+          phase !== 'hidden' ? 'is-shown' : '',
+          expanded ? 'is-expanded' : '',
+          showControls ? 'has-controls' : '',
+        ].join(' ')}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        role="status"
+        aria-label={`${PHASE_LABELS[phase]}, ${timeText}`}
+      >
+        <span className="pill-indicator" aria-hidden="true">
+          {phase === 'finishing' ? <span className="pill-spinner" /> : <span className="pill-dot" />}
+        </span>
 
-                        // Green → Yellow → Red based on intensity
-                        const r = Math.round(intensity > 0.5 ? 255 : intensity * 2 * 255);
-                        const g = Math.round(intensity < 0.5 ? 200 + intensity * 110 : (1 - intensity) * 2 * 255);
-                        const color = `rgb(${r}, ${g}, 50)`;
+        <span className="pill-bars" aria-hidden="true">
+          {Array.from({ length: BAR_COUNT }, (_, i) => (
+            <span key={i} className="pill-bar" ref={(el) => { barRefs.current[i] = el; }} />
+          ))}
+        </span>
 
-                        return (
-                            <div
-                                key={index}
-                                className={`eq-bar ${isPaused ? 'paused' : ''}`}
-                                style={{
-                                    height: `${height}px`,
-                                    backgroundColor: color,
-                                }}
-                            />
-                        );
-                    })}
-                </div>
-                <div
-                    className="overlay-controls"
-                    onMouseEnter={handleMouseEnterInteractive}
-                    onMouseLeave={handleMouseLeaveInteractive}
-                >
-                    <button
-                        className={`overlay-btn pause-btn ${isPaused ? 'paused' : ''}`}
-                        onClick={handlePause}
-                        title={isPaused ? 'Resume' : 'Pause'}
-                        aria-label={isPaused ? 'Resume' : 'Pause'}
-                    >
-                        {isPaused ? (
-                            // Play icon
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <polygon points="5,3 19,12 5,21" />
-                            </svg>
-                        ) : (
-                            // Pause icon
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <rect x="5" y="3" width="4" height="18" />
-                                <rect x="15" y="3" width="4" height="18" />
-                            </svg>
-                        )}
-                    </button>
-                    <button
-                        className="overlay-btn stop-btn"
-                        onClick={handleStop}
-                        title="Stop Recording"
-                        aria-label="Stop recording"
-                    >
-                        {/* Stop icon */}
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <rect x="4" y="4" width="16" height="16" rx="2" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
+        <span className="pill-extra">
+          <span className="pill-timer">{phase === 'connecting' ? 'Connecting' : timeText}</span>
+          {showControls && (
+            <>
+              <span className="pill-divider" aria-hidden="true" />
+              <button
+                type="button"
+                className="pill-btn"
+                onClick={() => window.electronAPI.overlayAction(phase === 'paused' ? 'resume' : 'pause')}
+                aria-label={phase === 'paused' ? 'Resume' : 'Pause'}
+                title={phase === 'paused' ? 'Resume' : 'Pause'}
+              >
+                {phase === 'paused' ? (
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z" /></svg>
+                ) : (
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1" /><rect x="9.5" y="2.5" width="3" height="11" rx="1" /></svg>
+                )}
+              </button>
+              <button
+                type="button"
+                className="pill-btn pill-btn--stop"
+                onClick={() => window.electronAPI.overlayAction('stop')}
+                aria-label="Stop"
+                title="Stop"
+              >
+                <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2.2" /></svg>
+              </button>
+            </>
+          )}
+        </span>
+      </div>
+    </div>
+  );
 }

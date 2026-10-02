@@ -64,7 +64,7 @@ export default function App() {
     loadRecentTranscriptions();
 
     // Ensure overlay is hidden on start
-    window.electronAPI.setOverlayVisible(false);
+    window.electronAPI.setOverlayState({ phase: 'hidden', holdMode: false });
   }, []);
 
   const handleToggleShortcutChange = useCallback((shortcut: string) => {
@@ -110,7 +110,7 @@ export default function App() {
             toggleShortcut={toggleShortcut}
             holdShortcut={holdShortcut}
             recentTranscriptions={recentTranscriptions}
-            onStart={recorder.startRecording}
+            onStart={() => recorder.startRecording({ holdMode: pushToTalk })}
             onStop={recorder.stopRecording}
             onCancel={recorder.cancelRecording}
             onDismissError={recorder.dismissError}
