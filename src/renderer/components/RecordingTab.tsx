@@ -16,7 +16,6 @@ interface RecordingTabProps {
   isPaused: boolean;
   isProcessing: boolean;
   errorMessage: string | null;
-  liveTranscript: string;
   pushToTalk: boolean;
   toggleShortcut: string;
   holdShortcut: string;
@@ -105,7 +104,6 @@ export const RecordingTab: React.FC<RecordingTabProps> = ({
   isPaused,
   isProcessing,
   errorMessage,
-  liveTranscript,
   pushToTalk,
   toggleShortcut,
   holdShortcut,
@@ -176,12 +174,6 @@ export const RecordingTab: React.FC<RecordingTabProps> = ({
             <span className="recorder-hint">{pushToTalk ? 'Hold the button to dictate' : 'Click the button to dictate'}</span>
           )}
         </div>
-
-        {isRecording && (
-          <div className="live-transcript" aria-live="polite">
-            {liveTranscript || <span className="live-transcript-placeholder">Listening…</span>}
-          </div>
-        )}
 
         {isRecording && !pushToTalk && (
           <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>

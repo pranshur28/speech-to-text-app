@@ -106,7 +106,6 @@ export default function App() {
             isPaused={recorder.isPaused}
             isProcessing={recorder.isProcessing}
             errorMessage={recorder.errorMessage}
-            liveTranscript={recorder.liveTranscript}
             pushToTalk={pushToTalk}
             toggleShortcut={toggleShortcut}
             holdShortcut={holdShortcut}

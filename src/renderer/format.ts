@@ -29,11 +29,3 @@ export function formatElapsed(ms: number): string {
   if (hours > 0) return `${hours}:${String(minutes).padStart(2, '0')}:${ss}`;
   return `${minutes}:${ss}`;
 }
-
-/** Keep only the end of a long live transcript so the newest words stay visible. */
-export function tailText(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  const cut = text.slice(text.length - maxChars);
-  const firstSpace = cut.indexOf(' ');
-  return '…' + (firstSpace > 0 && firstSpace < 20 ? cut.slice(firstSpace + 1) : cut);
-}

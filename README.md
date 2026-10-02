@@ -22,7 +22,8 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 - **🤖 Deepgram Streaming Transcription** (choose in Settings)
   - **Flux** (default): Model-integrated end-of-turn detection, so text is pasted in whole sentences
   - **Nova-3**: Smart formatting (numbers, dates) and spoken punctuation ("comma", "period", "new line", "new paragraph")
-  - Text is pasted live into the focused app; your clipboard is restored afterwards
+  - **Type as you speak** (default): words appear in your text box as they are heard and are corrected in place as Deepgram refines them. Only text the app typed is ever erased, and corrections stop if you switch windows
+  - Or paste each phrase once confirmed (Settings switch); your clipboard is always restored afterwards
   - Clear error messages (and a desktop notification when the window is hidden) if Deepgram can't connect or the connection drops
 
 - **📖 Custom Dictionary**
@@ -125,13 +126,13 @@ npm run dist
 
 **Method 1: Toggle Mode (Default)**
 1. Press `Ctrl+Shift+Space` (or `Cmd+Shift+Space` on macOS)
-2. Speak naturally — text is pasted into the active window as each sentence/phrase is finalized
+2. Speak naturally — words appear in the active window as you speak and are corrected in place
 3. Press the shortcut again to stop; the full transcript is saved to History
 
 **Method 2: Push-to-Talk Mode**
 1. Configure a hold shortcut in Settings
 2. Hold the shortcut while speaking
-3. Release to stop; the last words are flushed and pasted
+3. Release to stop; the last words are finalized (if the hold key includes Ctrl/Shift/Alt, typing waits until you release it)
 
 ### Searching Your Notes
 

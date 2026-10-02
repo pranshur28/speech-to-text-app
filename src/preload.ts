@@ -42,13 +42,14 @@ export interface IElectronAPI {
   deepgramSendAudioChunk: (data: ArrayBuffer) => void;
   deepgramStopSession: () => Promise<{ success: boolean; transcript: string; formatted: string; error?: string }>;
   deepgramCancelSession: () => Promise<{ success: boolean }>;
-  onDeepgramTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => () => void;
   onDeepgramConnectionLost: (callback: (data: { message: string }) => void) => () => void;
   getDeepgramKeyStatus: () => Promise<{ configured: boolean }>;
   getDeepgramApiKey: () => Promise<string>;
   saveDeepgramApiKey: (key: string) => Promise<{ success: boolean; error: string | null }>;
   getSttEngine: () => Promise<SttEngine>;
   setSttEngine: (engine: SttEngine) => Promise<{ success: boolean }>;
+  getLiveTyping: () => Promise<boolean>;
+  setLiveTyping: (enabled: boolean) => Promise<{ success: boolean }>;
 }
 
 const electronAPI: IElectronAPI = {
@@ -114,11 +115,6 @@ const electronAPI: IElectronAPI = {
   deepgramSendAudioChunk: (data: ArrayBuffer) => ipcRenderer.send('deepgram:audio-chunk', data),
   deepgramStopSession: () => ipcRenderer.invoke('deepgram:stop-session'),
   deepgramCancelSession: () => ipcRenderer.invoke('deepgram:cancel-session'),
-  onDeepgramTranscript: (callback: (data: { text: string; isFinal: boolean }) => void) => {
-    const handler = (_event: any, data: { text: string; isFinal: boolean }) => callback(data);
-    ipcRenderer.on('deepgram:transcript', handler);
-    return () => ipcRenderer.removeListener('deepgram:transcript', handler);
-  },
   onDeepgramConnectionLost: (callback: (data: { message: string }) => void) => {
     const handler = (_event: any, data: { message: string }) => callback(data);
     ipcRenderer.on('deepgram:connection-lost', handler);
@@ -129,6 +125,8 @@ const electronAPI: IElectronAPI = {
   saveDeepgramApiKey: (key: string) => ipcRenderer.invoke('save-deepgram-api-key', key),
   getSttEngine: () => ipcRenderer.invoke('get-stt-engine'),
   setSttEngine: (engine: SttEngine) => ipcRenderer.invoke('set-stt-engine', engine),
+  getLiveTyping: () => ipcRenderer.invoke('get-live-typing'),
+  setLiveTyping: (enabled: boolean) => ipcRenderer.invoke('set-live-typing', enabled),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

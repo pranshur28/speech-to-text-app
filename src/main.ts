@@ -85,9 +85,9 @@ const createWindow = () => {
   });
 };
 
-// Overlay: waveform pill with a live-text bubble above it
-const OVERLAY_WIDTH = 460;
-const OVERLAY_HEIGHT = 130;
+// Overlay: waveform pill with pause/stop controls
+const OVERLAY_WIDTH = 240;
+const OVERLAY_HEIGHT = 65;
 
 const createOverlayWindow = () => {
   overlayWindow = new BrowserWindow({

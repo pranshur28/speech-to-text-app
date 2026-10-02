@@ -1,4 +1,4 @@
-import { formatElapsed, shortcutKeys, tailText } from '../format';
+import { formatElapsed, shortcutKeys } from '../format';
 
 describe('shortcutKeys', () => {
   test('splits a shortcut into keys', () => {
@@ -29,18 +29,5 @@ describe('formatElapsed', () => {
     [-5, '0:00'],
   ])('%d ms → %s', (ms, expected) => {
     expect(formatElapsed(ms)).toBe(expected);
-  });
-});
-
-describe('tailText', () => {
-  test('returns short text unchanged', () => {
-    expect(tailText('hello world', 50)).toBe('hello world');
-  });
-
-  test('keeps the end of long text, starting at a word boundary', () => {
-    const result = tailText('the quick brown fox jumps over the lazy dog', 20);
-    expect(result.startsWith('…')).toBe(true);
-    expect(result.endsWith('lazy dog')).toBe(true);
-    expect(result.length).toBeLessThanOrEqual(21);
   });
 });

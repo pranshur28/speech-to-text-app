@@ -60,11 +60,11 @@ Tests run inside Electron's Node.js so the native SQLite module loads without re
 ### Push-to-Talk Mode (Recommended)
 - Configure a hold shortcut in Settings (e.g., `Ctrl+Shift+H`)
 - Hold the shortcut while speaking
-- Release to stop; the last words are flushed and pasted
+- Release to stop; the last words are finalized (with a modifier in the hold key, text appears when you release)
 
 ### Toggle Mode
 - Press `Ctrl+Shift+Space` (or `Cmd+Shift+Space` on macOS) to start recording
-- Text is pasted into the focused app as you speak
+- Words appear in the focused app as you speak (turn off "Type as you speak" in Settings to paste whole phrases instead)
 - Press again to stop; the full transcript is saved to History
 
 ### Custom Dictionary

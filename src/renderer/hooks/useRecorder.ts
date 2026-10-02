@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { initialRecordingState, recordingReducer } from '../recordingState';
 
 // Deepgram recommends ~80ms audio chunks for Flux; works equally well for Nova-3
@@ -37,10 +37,6 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
   const onSavedRef = useRef(onSaved);
   useEffect(() => { onSavedRef.current = onSaved; }, [onSaved]);
 
-  // Live transcript from Deepgram while recording
-  const [liveTranscript, setLiveTranscript] = useState('');
-  const finalsTextRef = useRef('');
-
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const pendingStopRef = useRef(false);
@@ -55,11 +51,6 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
   const fail = (status: string, errorMessage: string) => {
     dispatch({ type: 'ERROR', status, errorMessage });
     notifyIfHidden(errorMessage);
-  };
-
-  const clearLiveTranscript = () => {
-    setLiveTranscript('');
-    finalsTextRef.current = '';
   };
 
   const releaseMicrophone = () => {
@@ -119,7 +110,6 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
   const startRecording = async () => {
     dispatch({ type: 'START_REQUESTED' });
     pendingStopRef.current = false;
-    clearLiveTranscript();
 
     let stream: MediaStream;
     try {
@@ -178,7 +168,6 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     mediaRecorder.stop();
 
     dispatch({ type: 'STOP_PROCESSING' });
-    clearLiveTranscript();
     window.electronAPI.setOverlayVisible(false);
 
     try {
@@ -230,7 +219,6 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     window.electronAPI.deepgramCancelSession();
 
     dispatch({ type: 'CANCEL' });
-    clearLiveTranscript();
     window.electronAPI.setOverlayVisible(false);
 
     resetLater(1500);
@@ -272,16 +260,6 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
       resumeRecording();
     });
 
-    const unsubTranscript = window.electronAPI.onDeepgramTranscript(({ text, isFinal }) => {
-      if (isFinal) {
-        finalsTextRef.current += (finalsTextRef.current ? ' ' : '') + text;
-        setLiveTranscript(finalsTextRef.current);
-      } else {
-        // Show confirmed finals + current interim
-        setLiveTranscript(finalsTextRef.current + (finalsTextRef.current ? ' ' : '') + text);
-      }
-    });
-
     const unsubConnectionLost = window.electronAPI.onDeepgramConnectionLost(({ message }) => {
       const { phase } = stateRef.current;
       if (phase !== 'recording' && phase !== 'paused') return;
@@ -294,7 +272,6 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
       unsubStop();
       unsubPause();
       unsubResume();
-      unsubTranscript();
       unsubConnectionLost();
     };
   }, []);
@@ -306,7 +283,6 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
     isRecording: state.phase === 'recording' || state.phase === 'paused',
     isPaused: state.phase === 'paused',
     isProcessing: state.phase === 'processing',
-    liveTranscript,
     startRecording,
     stopRecording: () => stopRecording(),
     cancelRecording,

@@ -47,10 +47,17 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveMessage, setSaveMessage] = useState('');
   const [listeningTarget, setListeningTarget] = useState<'toggle' | 'hold' | null>(null);
+  const [liveTyping, setLiveTyping] = useState(true);
 
   useEffect(() => {
     window.electronAPI.getDeepgramApiKey().then(setDeepgramApiKey);
+    window.electronAPI.getLiveTyping().then(setLiveTyping);
   }, []);
+
+  const handleLiveTypingChange = (enabled: boolean) => {
+    setLiveTyping(enabled);
+    window.electronAPI.setLiveTyping(enabled);
+  };
 
   const handleSaveDeepgramKey = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +143,25 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             ))}
           </div>
           <p className="field-help">Applies from the next recording.</p>
+        </div>
+
+        <div className="field field--row">
+          <div>
+            <label className="field-label" htmlFor="live-typing">Type as you speak</label>
+            <p className="field-help">
+              {liveTyping
+                ? 'Words appear in your text box as they\'re heard and are corrected in place. If some app misbehaves, turn this off.'
+                : 'Each phrase is pasted once Deepgram confirms it. Turn on to see words appear as you speak.'}
+            </p>
+          </div>
+          <Switch.Root
+            className="switch-root"
+            id="live-typing"
+            checked={liveTyping}
+            onCheckedChange={handleLiveTypingChange}
+          >
+            <Switch.Thumb className="switch-thumb" />
+          </Switch.Root>
         </div>
       </section>
 

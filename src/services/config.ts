@@ -8,6 +8,7 @@ export type SttEngine = 'flux' | 'nova-3';
 interface Config {
   deepgramApiKey?: string;
   sttEngine?: SttEngine;
+  liveTyping?: boolean;
   toggleShortcut?: string;
   holdShortcut?: string;
 }
@@ -83,6 +84,16 @@ export class ConfigService {
 
   setSttEngine(engine: SttEngine): void {
     this.config.sttEngine = engine;
+    this.save();
+  }
+
+  /** Type words as they're heard (default) vs. paste each phrase once it's confirmed. */
+  getLiveTyping(): boolean {
+    return this.config.liveTyping !== false;
+  }
+
+  setLiveTyping(enabled: boolean): void {
+    this.config.liveTyping = enabled;
     this.save();
   }
 }

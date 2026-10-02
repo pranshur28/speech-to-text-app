@@ -1,6 +1,7 @@
 import { ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { DeepgramStreamingService } from '../services/deepgram';
 import { SttEngine } from '../services/config';
+import { LiveTyper } from '../services/live-typer';
 import log from '../utils/logger';
 import { ServiceContext } from './types';
 
@@ -8,12 +9,33 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
   // Serialized paste queue — prevents overlapping clipboard operations
   let pasteQueue: Promise<void> = Promise.resolve();
 
+  // Live typing for the current session (null when "paste when confirmed" mode is used)
+  let liveTyper: LiveTyper | null = null;
+
   const sendToMain = (channel: string, payload: unknown) => {
     const mainWindow = ctx.getMainWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(channel, payload);
     }
   };
+
+  const createLiveTyper = () => new LiveTyper({
+    // Hotkey tracking ignores our own keystrokes while input runs
+    runInput: async (fn) => {
+      const shortcutMgr = ctx.getShortcutManager();
+      const held = shortcutMgr.enterPasteMode();
+      try {
+        return await fn(held);
+      } finally {
+        shortcutMgr.exitPasteMode();
+      }
+    },
+    typeText: (text) => ctx.getPasteService()!.typeText(text),
+    pasteText: (text) => ctx.getPasteService()!.paste(text),
+    pressBackspace: (count) => ctx.getPasteService()!.pressBackspace(count),
+    getActiveWindowId: () => ctx.getPasteService()!.getActiveWindowId(),
+    transform: (text) => ctx.getDictionaryService()?.applyReplacements(text) ?? text,
+  });
 
   // Paste a finalized phrase into the focused app via clipboard (Ctrl+V), one at a time
   const queuePaste = (text: string) => {
@@ -50,21 +72,21 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
       try { await existing.stopSession(); } catch (e) { /* ignore */ }
     }
 
-    // Reset paste queue for new session
+    // Reset output state for the new session
     pasteQueue = Promise.resolve();
+    liveTyper?.reset();
+    liveTyper = ctx.getConfigService().getLiveTyping() ? createLiveTyper() : null;
 
     const engine = ctx.getConfigService().getSttEngine();
     const keyterms = ctx.getDictionaryService()?.getKeyterms().terms ?? [];
     const svc = new DeepgramStreamingService(apiKey, engine, keyterms);
 
-    // Forward live transcript chunks to the main window and overlay, and paste finals immediately
+    // Live typing: every guess is typed and corrected in place.
+    // Otherwise: paste each phrase once Deepgram confirms it.
     svc.setTranscriptCallback((text, isFinal) => {
-      sendToMain('deepgram:transcript', { text, isFinal });
-      const overlay = ctx.getOverlayWindow();
-      if (overlay && !overlay.isDestroyed()) {
-        overlay.webContents.send('deepgram:transcript', { text, isFinal });
-      }
-      if (isFinal && text.trim()) {
+      if (liveTyper) {
+        liveTyper.update(text, isFinal);
+      } else if (isFinal && text.trim()) {
         queuePaste(text);
       }
     });
@@ -98,8 +120,9 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
 
     try {
       const transcript = await deepgramService.stopSession();
-      // Let the last phrase finish pasting before reporting done
+      // Let the last phrase finish typing/pasting before reporting done
       await pasteQueue;
+      await liveTyper?.flush();
 
       if (!transcript || transcript.trim().length === 0) {
         return { success: true, transcript: '', formatted: '' };
@@ -124,10 +147,12 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
     }
   });
 
-  // Close the session without saving (phrases already pasted stay where they are)
+  // Close the session without saving (text already typed/pasted stays where it is)
   ipcMain.handle('deepgram:cancel-session', async () => {
     const deepgramService = ctx.getDeepgramService();
     ctx.setDeepgramService(null);
+    liveTyper?.reset();
+    liveTyper = null;
     if (deepgramService) {
       try { await deepgramService.stopSession(); } catch (e) { /* ignore */ }
     }
@@ -160,6 +185,15 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
       return { success: false };
     }
     ctx.getConfigService().setSttEngine(engine);
+    return { success: true };
+  });
+
+  ipcMain.handle('get-live-typing', () => {
+    return ctx.getConfigService().getLiveTyping();
+  });
+
+  ipcMain.handle('set-live-typing', (_event: IpcMainInvokeEvent, enabled: boolean) => {
+    ctx.getConfigService().setLiveTyping(!!enabled);
     return { success: true };
   });
 }

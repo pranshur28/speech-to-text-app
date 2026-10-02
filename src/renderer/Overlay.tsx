@@ -1,17 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './overlay.css';
-import { tailText } from './format';
 
 const BAR_COUNT = 12;
-// Enough for about two lines in the bubble; older words scroll off the front
-const MAX_LIVE_CHARS = 110;
 
 export default function Overlay() {
     const [waveform, setWaveform] = useState<number[]>(new Array(BAR_COUNT).fill(0));
     const [isPaused, setIsPaused] = useState(false);
-    const [liveText, setLiveText] = useState('');
     const isPausedRef = useRef(false);
-    const finalsRef = useRef('');
 
     // Keep ref in sync with state
     useEffect(() => {
@@ -29,27 +24,14 @@ export default function Overlay() {
             }
         });
 
-        // Live words from Deepgram: confirmed phrases plus the current interim guess
-        const unsubTranscript = window.electronAPI.onDeepgramTranscript(({ text, isFinal }) => {
-            if (isFinal) {
-                finalsRef.current += (finalsRef.current ? ' ' : '') + text;
-                setLiveText(finalsRef.current);
-            } else {
-                setLiveText(finalsRef.current + (finalsRef.current ? ' ' : '') + text);
-            }
-        });
-
-        // New recording: clear the previous session
+        // New recording: clear the previous session's pause state and levels
         const unsubReset = window.electronAPI.onOverlayReset(() => {
-            finalsRef.current = '';
-            setLiveText('');
             setIsPaused(false);
             setWaveform(new Array(BAR_COUNT).fill(0));
         });
 
         return () => {
             unsubAudio();
-            unsubTranscript();
             unsubReset();
         };
     }, []);
@@ -74,9 +56,6 @@ export default function Overlay() {
 
     return (
         <div className="overlay-container">
-            <div className={`overlay-text ${liveText ? 'is-visible' : ''}`} aria-live="polite">
-                {tailText(liveText, MAX_LIVE_CHARS)}
-            </div>
             <div className="overlay-pill">
                 <div className="waveform-capsule">
                     {waveform.map((value, index) => {

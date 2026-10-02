@@ -2,6 +2,23 @@ import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { BrowserWindow } from 'electron';
 import log from '../utils/logger';
 
+// Keys our own simulated input can produce: typing (letters, digits, punctuation, Space,
+// Shift), corrections (Backspace) and clipboard paste (Ctrl+V).
+const SYNTHESIZED_KEY_NAMES = [
+  'Backspace', 'Space', 'Shift', 'ShiftRight', 'Ctrl', 'CtrlRight',
+  'Semicolon', 'Equal', 'Comma', 'Minus', 'Period', 'Slash', 'Backquote',
+  'BracketLeft', 'Backslash', 'BracketRight', 'Quote',
+  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split(''),
+];
+const SYNTHESIZED_KEYS = new Set<number>(
+  SYNTHESIZED_KEY_NAMES.map((name) => (UiohookKey as any)[name]).filter((code) => code !== undefined)
+);
+
+/** True for keys that our own typing/pasting can generate (and so must be ignored meanwhile). */
+export function isSynthesizedKey(keycode: number): boolean {
+  return SYNTHESIZED_KEYS.has(keycode);
+}
+
 interface ParsedShortcut {
   requiresMeta: boolean;
   requiresCtrl: boolean;
@@ -18,22 +35,20 @@ export class ShortcutManager {
   private pressedKeys = new Set<number>();
   private getMainWindow: () => BrowserWindow | null;
 
-  // Paste mode: when true, ignore synthetic key events from paste simulation
+  // Paste mode: while our own typing/pasting runs, ignore events for keys it can generate.
+  // Other keys (F-keys, CapsLock, …) are still tracked, so a hold-to-talk release isn't missed.
   private inPasteMode = false;
-  private pressedKeysSnapshot: Set<number> | null = null;
 
   constructor(getMainWindow: () => BrowserWindow | null) {
     this.getMainWindow = getMainWindow;
   }
 
   /**
-   * Enter paste mode: freezes pressedKeys tracking so synthetic Ctrl+V events
-   * from nut-js don't corrupt the hotkey state.
+   * Enter paste mode so synthetic keystrokes from nut-js don't corrupt the hotkey state.
    * Returns which modifier keys are currently physically held.
    */
   enterPasteMode(): { ctrlHeld: boolean; shiftHeld: boolean; altHeld: boolean; metaHeld: boolean } {
     this.inPasteMode = true;
-    this.pressedKeysSnapshot = new Set(this.pressedKeys);
     return {
       ctrlHeld: this.pressedKeys.has(UiohookKey.Ctrl) || this.pressedKeys.has(UiohookKey.CtrlRight),
       shiftHeld: this.pressedKeys.has(UiohookKey.Shift) || this.pressedKeys.has(UiohookKey.ShiftRight),
@@ -42,16 +57,22 @@ export class ShortcutManager {
     };
   }
 
-  /**
-   * Exit paste mode: restores pressedKeys to the pre-paste snapshot so hotkey
-   * detection continues accurately.
-   */
   exitPasteMode(): void {
-    if (this.pressedKeysSnapshot) {
-      this.pressedKeys = this.pressedKeysSnapshot;
-      this.pressedKeysSnapshot = null;
-    }
     this.inPasteMode = false;
+  }
+
+  // Every key event carries the OS modifier state. Use it to drop modifiers whose release
+  // we missed (e.g. released during paste mode), so they don't look held forever.
+  private reconcileModifiers(e: { ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean; metaKey?: boolean }) {
+    const pairs: Array<[boolean | undefined, number[]]> = [
+      [e.ctrlKey, [UiohookKey.Ctrl, UiohookKey.CtrlRight]],
+      [e.shiftKey, [UiohookKey.Shift, UiohookKey.ShiftRight]],
+      [e.altKey, [UiohookKey.Alt, UiohookKey.AltRight]],
+      [e.metaKey, [UiohookKey.Meta, UiohookKey.MetaRight]],
+    ];
+    for (const [down, codes] of pairs) {
+      if (down === false) codes.forEach((code) => this.pressedKeys.delete(code));
+    }
   }
 
   getToggleShortcut(): string { return this.toggleShortcut; }
@@ -163,7 +184,7 @@ export class ShortcutManager {
               key = keyCode;
             }
           } else if (/^[0-9]$/.test(part)) {
-            const keyCode = (UiohookKey as any)[`Digit${part}`];
+            const keyCode = (UiohookKey as any)[part];
             if (keyCode !== undefined) {
               key = keyCode;
             }
@@ -216,10 +237,10 @@ export class ShortcutManager {
     uIOhook.removeAllListeners('keyup');
 
     uIOhook.on('keydown', (e: any) => {
-      // During paste mode, ignore all key events to prevent synthetic
-      // Ctrl+V keystrokes from corrupting hotkey tracking state
-      if (this.inPasteMode) return;
+      // During paste mode, ignore keys our own input generates
+      if (this.inPasteMode && isSynthesizedKey(e.keycode)) return;
 
+      this.reconcileModifiers(e);
       this.pressedKeys.add(e.keycode);
 
       if (toggleKeys && toggleKeys.key !== null && e.keycode === toggleKeys.key) {
@@ -242,10 +263,10 @@ export class ShortcutManager {
     });
 
     uIOhook.on('keyup', (e: any) => {
-      // During paste mode, ignore all key events to prevent synthetic
-      // Ctrl+V keystrokes from corrupting hotkey tracking state
-      if (this.inPasteMode) return;
+      // During paste mode, ignore keys our own input generates
+      if (this.inPasteMode && isSynthesizedKey(e.keycode)) return;
 
+      this.reconcileModifiers(e);
       this.pressedKeys.delete(e.keycode);
 
       if (toggleKeys && toggleKeys.key !== null && e.keycode === toggleKeys.key) {
