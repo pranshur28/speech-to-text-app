@@ -1,10 +1,17 @@
 import { DatabaseService, Transcription, TranscriptionFilters } from './database';
 
+// Dates arrive as epoch milliseconds over IPC from the renderer; Date objects are also accepted
+type DateInput = Date | number;
+
+function toMillis(value: DateInput): number {
+  return typeof value === 'number' ? value : value.getTime();
+}
+
 export interface SearchOptions {
   query: string;
   filters?: {
-    startDate?: Date;
-    endDate?: Date;
+    startDate?: DateInput;
+    endDate?: DateInput;
     isFavorite?: boolean;
     tags?: string[];
   };
@@ -91,10 +98,10 @@ export class SearchService {
 
     if (userFilters) {
       if (userFilters.startDate) {
-        combinedFilters.startDate = userFilters.startDate.getTime();
+        combinedFilters.startDate = toMillis(userFilters.startDate);
       }
       if (userFilters.endDate) {
-        combinedFilters.endDate = userFilters.endDate.getTime();
+        combinedFilters.endDate = toMillis(userFilters.endDate);
       }
       if (userFilters.isFavorite !== undefined) {
         combinedFilters.isFavorite = userFilters.isFavorite;
@@ -109,8 +116,11 @@ export class SearchService {
       ? this.db.searchTranscriptions(searchText, combinedFilters)
       : this.db.getTranscriptions(combinedFilters);
 
-    // Get total count (for pagination)
-    const total = this.db.getStats().total;
+    // Total matching the same query and filters (for pagination)
+    const { limit: _limit, offset: _offset, ...countFilters } = combinedFilters;
+    const total = searchText.trim()
+      ? this.db.countSearchResults(searchText, countFilters)
+      : this.db.countTranscriptions(countFilters);
 
     return {
       transcriptions,

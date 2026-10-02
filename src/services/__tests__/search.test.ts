@@ -277,7 +277,38 @@ describe('SearchService', () => {
       });
 
       expect(result.transcriptions).toHaveLength(0);
-      expect(result.total).toBeGreaterThan(0); // Total still shows all transcriptions
+      expect(result.total).toBe(0);
+      expect(result.hasMore).toBe(false);
+    });
+  });
+
+  describe('Filters from the renderer', () => {
+    test('accepts dates as epoch milliseconds (as sent over IPC)', () => {
+      const now = Date.now();
+      expect(() => searchService.search({
+        query: 'budget',
+        filters: { startDate: now - 4500, endDate: now },
+      })).not.toThrow();
+
+      const result = searchService.search({
+        query: 'budget',
+        filters: { startDate: now - 4500, endDate: now },
+      });
+      expect(result.transcriptions).toHaveLength(1);
+      expect(result.transcriptions[0].formatted_text).toContain('Q2');
+    });
+
+    test('total counts only matching transcriptions', () => {
+      const result = searchService.search({ query: 'budget', limit: 1 });
+      expect(result.transcriptions).toHaveLength(1);
+      expect(result.total).toBe(2);
+      expect(result.hasMore).toBe(true);
+    });
+
+    test('total respects filters without a search query', () => {
+      const result = searchService.search({ query: '', filters: { isFavorite: true } });
+      expect(result.total).toBe(2);
+      expect(result.hasMore).toBe(false);
     });
   });
 });

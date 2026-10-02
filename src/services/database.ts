@@ -32,6 +32,19 @@ export interface TranscriptionFilters {
   offset?: number;
 }
 
+/**
+ * Turn free text typed by the user into a safe FTS5 MATCH expression.
+ * Each word is quoted as a literal phrase (so characters like " - ( * : can't cause syntax
+ * errors), and words are implicitly ANDed. Returns '' when there is nothing to match.
+ */
+export function toFtsQuery(input: string): string {
+  return (input || '')
+    .split(/\s+/)
+    .filter((word) => word.length > 0)
+    .map((word) => `"${word.replace(/"/g, '""')}"`)
+    .join(' ');
+}
+
 export class DatabaseService {
   private db: Database.Database;
   private dbPath: string;
@@ -60,9 +73,9 @@ export class DatabaseService {
   }
 
   private migrate(): void {
-    const version = this.getSchemaVersion();
+    let version = this.getSchemaVersion();
 
-    if (version === 0) {
+    if (version < 1) {
       log.info('[DatabaseService] Running initial migration...');
 
       // Main transcriptions table
@@ -151,36 +164,68 @@ export class DatabaseService {
         INSERT INTO schema_version (version) VALUES (1);
       `);
 
+      version = 1;
       log.info('[DatabaseService] Migration complete. Schema version: 1');
     }
 
-    // Migration to version 2: Add dictionary_entries table
-    if (version === 1 || version === 0) {
-      const currentVersion = this.getSchemaVersion();
-      if (currentVersion === 1) {
-        log.info('[DatabaseService] Running migration to version 2...');
+    // Version 2: custom dictionary entries
+    if (version < 2) {
+      log.info('[DatabaseService] Running migration to version 2...');
 
+      this.db.exec(`
+        -- Custom dictionary entries table for user-defined replacements
+        CREATE TABLE IF NOT EXISTS dictionary_entries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          spoken_phrase TEXT NOT NULL UNIQUE,
+          replacement TEXT NOT NULL,
+          is_case_sensitive INTEGER DEFAULT 0,
+          is_enabled INTEGER DEFAULT 1,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        -- Index for fast lookup during text processing
+        CREATE INDEX IF NOT EXISTS idx_dictionary_spoken ON dictionary_entries(spoken_phrase);
+        CREATE INDEX IF NOT EXISTS idx_dictionary_enabled ON dictionary_entries(is_enabled);
+
+        UPDATE schema_version SET version = 2;
+      `);
+
+      version = 2;
+      log.info('[DatabaseService] Migration complete. Schema version: 2');
+    }
+
+    // Version 3: correct FTS sync triggers. An external-content FTS5 table must be told which
+    // old values to remove via the special 'delete' command; plain DELETE/UPDATE on it leaves
+    // stale entries behind. Rebuild the index from the source table afterwards.
+    if (version < 3) {
+      log.info('[DatabaseService] Running migration to version 3...');
+
+      this.db.transaction(() => {
         this.db.exec(`
-          -- Custom dictionary entries table for user-defined replacements
-          CREATE TABLE IF NOT EXISTS dictionary_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            spoken_phrase TEXT NOT NULL UNIQUE,
-            replacement TEXT NOT NULL,
-            is_case_sensitive INTEGER DEFAULT 0,
-            is_enabled INTEGER DEFAULT 1,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-          );
+          DROP TRIGGER IF EXISTS transcriptions_ad;
+          DROP TRIGGER IF EXISTS transcriptions_au;
 
-          -- Index for fast lookup during text processing
-          CREATE INDEX IF NOT EXISTS idx_dictionary_spoken ON dictionary_entries(spoken_phrase);
-          CREATE INDEX IF NOT EXISTS idx_dictionary_enabled ON dictionary_entries(is_enabled);
+          CREATE TRIGGER transcriptions_ad AFTER DELETE ON transcriptions BEGIN
+            INSERT INTO transcriptions_fts(transcriptions_fts, rowid, raw_text, formatted_text)
+            VALUES ('delete', old.id, old.raw_text, old.formatted_text);
+          END;
 
-          UPDATE schema_version SET version = 2;
+          CREATE TRIGGER transcriptions_au AFTER UPDATE ON transcriptions BEGIN
+            INSERT INTO transcriptions_fts(transcriptions_fts, rowid, raw_text, formatted_text)
+            VALUES ('delete', old.id, old.raw_text, old.formatted_text);
+            INSERT INTO transcriptions_fts(rowid, raw_text, formatted_text)
+            VALUES (new.id, new.raw_text, new.formatted_text);
+          END;
+
+          INSERT INTO transcriptions_fts(transcriptions_fts) VALUES ('rebuild');
+
+          UPDATE schema_version SET version = 3;
         `);
+      })();
 
-        log.info('[DatabaseService] Migration complete. Schema version: 2');
-      }
+      version = 3;
+      log.info('[DatabaseService] Migration complete. Schema version: 3');
     }
   }
 
@@ -223,88 +268,80 @@ export class DatabaseService {
   }
 
   getTranscriptions(filters: TranscriptionFilters = {}): Transcription[] {
-    let query = 'SELECT * FROM transcriptions WHERE 1=1';
-    const params: any[] = [];
+    const where = this.buildFilterClause(filters);
+    const page = this.buildPagination(filters);
+    return this.db
+      .prepare(`SELECT t.* FROM transcriptions t WHERE 1=1${where.sql} ORDER BY t.timestamp DESC${page.sql}`)
+      .all(...where.params, ...page.params) as Transcription[];
+  }
 
-    // Filter by favorite
-    if (filters.isFavorite !== undefined) {
-      query += ' AND is_favorite = ?';
-      params.push(filters.isFavorite ? 1 : 0);
-    }
-
-    // Filter by date range
-    if (filters.startDate) {
-      query += ' AND timestamp >= ?';
-      params.push(filters.startDate);
-    }
-
-    if (filters.endDate) {
-      query += ' AND timestamp <= ?';
-      params.push(filters.endDate);
-    }
-
-    // Filter by tags (if provided)
-    if (filters.tags && filters.tags.length > 0) {
-      query += ` AND id IN (
-        SELECT DISTINCT note_id FROM note_tags
-        WHERE tag_id IN (
-          SELECT id FROM tags WHERE name IN (${filters.tags.map(() => '?').join(',')})
-        )
-      )`;
-      params.push(...filters.tags);
-    }
-
-    // Order by timestamp descending (newest first)
-    query += ' ORDER BY timestamp DESC';
-
-    // Pagination
-    if (filters.limit) {
-      query += ' LIMIT ?';
-      params.push(filters.limit);
-    }
-
-    if (filters.offset) {
-      query += ' OFFSET ?';
-      params.push(filters.offset);
-    }
-
-    const stmt = this.db.prepare(query);
-    return stmt.all(...params) as Transcription[];
+  countTranscriptions(filters: TranscriptionFilters = {}): number {
+    const where = this.buildFilterClause(filters);
+    const row = this.db
+      .prepare(`SELECT COUNT(*) as count FROM transcriptions t WHERE 1=1${where.sql}`)
+      .get(...where.params) as { count: number };
+    return row.count;
   }
 
   searchTranscriptions(searchQuery: string, filters: TranscriptionFilters = {}): Transcription[] {
-    if (!searchQuery || searchQuery.trim() === '') {
+    const match = toFtsQuery(searchQuery);
+    if (!match) {
       return this.getTranscriptions(filters);
     }
 
-    let query = `
-      SELECT t.*, rank
-      FROM transcriptions t
-      JOIN transcriptions_fts fts ON t.id = fts.rowid
-      WHERE transcriptions_fts MATCH ?
-    `;
-    const params: any[] = [searchQuery];
+    const where = this.buildFilterClause(filters);
+    const page = this.buildPagination(filters);
+    return this.db
+      .prepare(`
+        SELECT t.*, rank
+        FROM transcriptions t
+        JOIN transcriptions_fts fts ON t.id = fts.rowid
+        WHERE transcriptions_fts MATCH ?${where.sql}
+        ORDER BY rank, t.timestamp DESC${page.sql}
+      `)
+      .all(match, ...where.params, ...page.params) as Transcription[];
+  }
 
-    // Filter by favorite
+  countSearchResults(searchQuery: string, filters: TranscriptionFilters = {}): number {
+    const match = toFtsQuery(searchQuery);
+    if (!match) {
+      return this.countTranscriptions(filters);
+    }
+
+    const where = this.buildFilterClause(filters);
+    const row = this.db
+      .prepare(`
+        SELECT COUNT(*) as count
+        FROM transcriptions t
+        JOIN transcriptions_fts fts ON t.id = fts.rowid
+        WHERE transcriptions_fts MATCH ?${where.sql}
+      `)
+      .get(match, ...where.params) as { count: number };
+    return row.count;
+  }
+
+  // WHERE conditions shared by listing, searching and counting (table alias "t")
+  private buildFilterClause(filters: TranscriptionFilters): { sql: string; params: any[] } {
+    let sql = '';
+    const params: any[] = [];
+
     if (filters.isFavorite !== undefined) {
-      query += ' AND t.is_favorite = ?';
+      sql += ' AND t.is_favorite = ?';
       params.push(filters.isFavorite ? 1 : 0);
     }
 
-    // Filter by date range
     if (filters.startDate) {
-      query += ' AND t.timestamp >= ?';
+      sql += ' AND t.timestamp >= ?';
       params.push(filters.startDate);
     }
 
     if (filters.endDate) {
-      query += ' AND t.timestamp <= ?';
+      sql += ' AND t.timestamp <= ?';
       params.push(filters.endDate);
     }
 
-    // Filter by tags (if provided)
     if (filters.tags && filters.tags.length > 0) {
-      query += ` AND t.id IN (
+      sql += ` AND t.id IN (
         SELECT DISTINCT note_id FROM note_tags
         WHERE tag_id IN (
           SELECT id FROM tags WHERE name IN (${filters.tags.map(() => '?').join(',')})
@@ -313,22 +350,26 @@ export class DatabaseService {
       params.push(...filters.tags);
     }
 
-    // Order by relevance (rank) first, then by timestamp
-    query += ' ORDER BY rank, t.timestamp DESC';
+    return { sql, params };
+  }
 
-    // Pagination
+  private buildPagination(filters: TranscriptionFilters): { sql: string; params: any[] } {
+    let sql = '';
+    const params: any[] = [];
+
     if (filters.limit) {
-      query += ' LIMIT ?';
+      sql += ' LIMIT ?';
       params.push(filters.limit);
     }
 
     if (filters.offset) {
-      query += ' OFFSET ?';
+      // SQLite requires LIMIT before OFFSET; -1 means no limit
+      if (!filters.limit) sql += ' LIMIT -1';
+      sql += ' OFFSET ?';
       params.push(filters.offset);
     }
 
-    const stmt = this.db.prepare(query);
-    return stmt.all(...params) as Transcription[];
+    return { sql, params };
   }
 
   updateTranscription(id: number, updates: Partial<TranscriptionInsert>): void {
