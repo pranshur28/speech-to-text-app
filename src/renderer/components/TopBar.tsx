@@ -5,39 +5,10 @@ import type { SttEngine } from '../../preload';
 
 export type TabType = 'recording' | 'history' | 'settings';
 
-const TABS: { id: TabType; label: string; icon: JSX.Element }[] = [
-  {
-    id: 'recording',
-    label: 'Record',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-        <line x1="12" x2="12" y1="19" y2="22" />
-      </svg>
-    ),
-  },
-  {
-    id: 'history',
-    label: 'History',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M3 3v5h5" />
-        <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
-        <path d="M12 7v5l4 2" />
-      </svg>
-    ),
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    ),
-  },
+const TABS: { id: TabType; label: string }[] = [
+  { id: 'recording', label: 'Record' },
+  { id: 'history', label: 'History' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 const ENGINE_LABELS: Record<SttEngine, string> = { 'flux': 'Flux', 'nova-3': 'Nova-3' };
@@ -58,6 +29,7 @@ interface TopBarProps {
   engine: SttEngine;
 }
 
+/** The window's title bar: status on the left, section switcher centred, Windows' own buttons on the right. */
 export default function TopBar({ activeTab, onTabChange, phase, statusText, hasError, engine }: TopBarProps) {
   // Ctrl+1/2/3 switch tabs
   useEffect(() => {
@@ -81,15 +53,17 @@ export default function TopBar({ activeTab, onTabChange, phase, statusText, hasE
       </div>
 
       <Tabs.Root value={activeTab} onValueChange={(value) => onTabChange(value as TabType)}>
-        <Tabs.List className="tab-list" aria-label="Sections">
-          {TABS.map((tab) => (
-            <Tabs.Trigger key={tab.id} value={tab.id} className="tab-trigger" aria-label={tab.label} title={`${tab.label} (Ctrl+${TABS.indexOf(tab) + 1})`}>
-              {tab.icon}
-              <span>{tab.label}</span>
+        <Tabs.List className="segmented" aria-label="Sections">
+          {TABS.map((tab, index) => (
+            <Tabs.Trigger key={tab.id} value={tab.id} className="segmented-item" title={`${tab.label} (Ctrl+${index + 1})`}>
+              {tab.label}
             </Tabs.Trigger>
           ))}
         </Tabs.List>
       </Tabs.Root>
+
+      {/* Keeps the switcher centred; Windows' caption buttons are drawn over this area */}
+      <div className="titlebar-spacer" aria-hidden="true" />
     </header>
   );
 }

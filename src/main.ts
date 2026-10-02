@@ -39,8 +39,15 @@ const createWindow = () => {
     height: 640,
     minWidth: 560,
     minHeight: 480,
-    backgroundColor: '#111114', // matches --bg so there's no white flash on launch
-    autoHideMenuBar: true, // menu (and its Ctrl+C/V roles) still works; Alt shows it
+    backgroundColor: '#0b0b0e', // matches --bg so there's no white flash on launch
+    autoHideMenuBar: true, // menu (and its Ctrl+C/V roles) still works without being shown
+    // The app's top bar doubles as the title bar; Windows draws its own min/max/close on the right
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#141418',
+      symbolColor: '#f5f5f7',
+      height: 52,
+    },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,

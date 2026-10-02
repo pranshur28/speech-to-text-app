@@ -58,12 +58,24 @@ const KeyChips: React.FC<{ shortcut: string }> = ({ shortcut }) => (
   </span>
 );
 
+const CopyIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="8.5" y="8.5" width="12" height="12" rx="2.5" />
+    <path d="M15.5 5.5v-.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h.5" />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+);
+
 const RecentItem: React.FC<{ item: Transcription }> = ({ item }) => {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(item.formatted_text);
       setCopied(true);
@@ -74,26 +86,27 @@ const RecentItem: React.FC<{ item: Transcription }> = ({ item }) => {
   };
 
   return (
-    <li className={`recent-item ${expanded ? 'recent-item--expanded' : ''}`}>
-      <div className="recent-item-header">
-        <time className="recent-item-time">{new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
-        <button
-          type="button"
-          className={`icon-text-btn ${copied ? 'icon-text-btn--success' : ''}`}
-          onClick={handleCopy}
-          aria-label="Copy transcription"
-        >
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
+    <li className={`recent-row ${expanded ? 'is-expanded' : ''}`}>
       <button
         type="button"
-        className="recent-item-text"
+        className="recent-row-body"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
         title={expanded ? 'Show less' : 'Show all'}
       >
-        {item.formatted_text}
+        <span className="recent-row-text">{item.formatted_text}</span>
+        <time className="recent-row-time">
+          {new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+        </time>
+      </button>
+      <button
+        type="button"
+        className={`round-btn ${copied ? 'is-done' : ''}`}
+        onClick={handleCopy}
+        aria-label={copied ? 'Copied' : 'Copy transcription'}
+        title={copied ? 'Copied' : 'Copy'}
+      >
+        {copied ? <CheckIcon /> : <CopyIcon />}
       </button>
     </li>
   );
@@ -137,14 +150,18 @@ export const RecordingTab: React.FC<RecordingTabProps> = ({
     ? 'Hold to record'
     : isRecording ? 'Stop recording' : 'Start recording';
 
+  const live = isRecording && !isPaused;
+
   return (
     <div className="recording-tab">
       <section className="recorder" aria-label="Recorder">
-        <div className={`record-button-wrap ${isRecording && !isPaused ? 'is-live' : ''}`}>
-          <span className="record-ring" aria-hidden="true" />
+        <div className={`orb-wrap ${isRecording ? 'is-recording' : ''} ${live ? 'is-live' : ''}`}>
+          <span className="orb-halo" aria-hidden="true" />
+          <span className="orb-ring orb-ring--outer" aria-hidden="true" />
+          <span className="orb-ring orb-ring--inner" aria-hidden="true" />
           <button
             type="button"
-            className={`record-button ${isRecording ? 'record-button--recording' : ''} ${isProcessing ? 'record-button--busy' : ''}`}
+            className={`orb ${isRecording ? 'orb--recording' : ''} ${isProcessing ? 'orb--busy' : ''}`}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
@@ -154,29 +171,43 @@ export const RecordingTab: React.FC<RecordingTabProps> = ({
             title={buttonLabel}
           >
             {isRecording && !pushToTalk ? (
-              <span className="stop-icon" aria-hidden="true" />
+              <span className="stop-glyph" aria-hidden="true" />
             ) : (
-              <span className="mic-icon" aria-hidden="true" />
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="9" y="2.5" width="6" height="12" rx="3" />
+                <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+                <line x1="12" y1="17.5" x2="12" y2="21" />
+              </svg>
             )}
           </button>
         </div>
 
-        <div className="recorder-caption">
+        {isRecording ? (
+          <div className={`recorder-timer ${isPaused ? 'is-paused' : ''}`}>{formatElapsed(elapsed)}</div>
+        ) : (
+          <h1 className="recorder-title">{isProcessing ? 'Finishing up…' : 'Ready when you are'}</h1>
+        )}
+
+        <p className="recorder-hint">
           {isRecording ? (
-            <span className="recorder-timer">{isPaused ? 'Paused · ' : ''}{formatElapsed(elapsed)}</span>
-          ) : isProcessing ? (
-            <span className="recorder-hint">Finishing up…</span>
+            isPaused ? (
+              <span>Paused</span>
+            ) : toggleShortcut && !pushToTalk ? (
+              <>Listening — press <KeyChips shortcut={toggleShortcut} /> to stop</>
+            ) : (
+              <span>Listening…</span>
+            )
           ) : toggleShortcut ? (
-            <span className="recorder-hint">Press <KeyChips shortcut={toggleShortcut} /> anywhere to dictate</span>
+            <>Press <KeyChips shortcut={toggleShortcut} /> anywhere to dictate</>
           ) : holdShortcut ? (
-            <span className="recorder-hint">Hold <KeyChips shortcut={holdShortcut} /> anywhere to dictate</span>
+            <>Hold <KeyChips shortcut={holdShortcut} /> anywhere to dictate</>
           ) : (
-            <span className="recorder-hint">{pushToTalk ? 'Hold the button to dictate' : 'Click the button to dictate'}</span>
+            <span>{pushToTalk ? 'Hold the button to dictate' : 'Click the button to dictate'}</span>
           )}
-        </div>
+        </p>
 
         {isRecording && !pushToTalk && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
+          <button type="button" className="capsule-btn" onClick={onCancel}>
             Cancel
           </button>
         )}
@@ -189,12 +220,12 @@ export const RecordingTab: React.FC<RecordingTabProps> = ({
         )}
       </section>
 
-      <section className="recent" aria-label="Recent transcriptions">
-        <h2 className="section-heading">Recent</h2>
+      <section className={`recent ${isRecording ? 'is-dimmed' : ''}`} aria-labelledby="recent-heading">
+        <h2 id="recent-heading" className="title-3">Recent</h2>
         {recentTranscriptions.length === 0 ? (
           <p className="empty-hint">Your dictations will appear here.</p>
         ) : (
-          <ul className="recent-list">
+          <ul className="grouped recent-list">
             {recentTranscriptions.map((item) => <RecentItem key={item.id} item={item} />)}
           </ul>
         )}

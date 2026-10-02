@@ -23,12 +23,12 @@ const ENGINES: { id: SttEngine; title: string; description: string }[] = [
   {
     id: 'flux',
     title: 'Flux',
-    description: 'Detects when you finish a thought, so text is pasted in whole sentences.',
+    description: 'Flux detects when you finish a thought.',
   },
   {
     id: 'nova-3',
     title: 'Nova-3',
-    description: 'Pastes after short pauses. Formats numbers and dates; say "comma", "period" or "new line" for punctuation.',
+    description: 'Nova-3 formats numbers and dates and understands spoken punctuation.',
   },
 ];
 
@@ -106,109 +106,84 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
   const listenForToggle = useCallback((listening: boolean) => setListeningTarget(listening ? 'toggle' : null), []);
   const listenForHold = useCallback((listening: boolean) => setListeningTarget(listening ? 'hold' : null), []);
 
+  const engineInfo = ENGINES.find((option) => option.id === engine) ?? ENGINES[0];
+
   return (
     <div className="settings">
-      <section className="settings-section" aria-labelledby="settings-transcription">
-        <h2 id="settings-transcription" className="section-heading">Transcription</h2>
+      <h1 className="large-title">Settings</h1>
 
-        <form className="field" onSubmit={handleSaveDeepgramKey}>
-          <label className="field-label" htmlFor="deepgram-key">Deepgram API key</label>
-          <div className="input-row">
+      <section className="settings-section" aria-labelledby="settings-transcription">
+        <h2 id="settings-transcription" className="group-title">Transcription</h2>
+        <div className="grouped">
+          <form className="row" onSubmit={handleSaveDeepgramKey}>
+            <label className="row-label" htmlFor="deepgram-key">Deepgram API key</label>
             <input
               id="deepgram-key"
               type="password"
-              className="input input--mono"
-              placeholder="Paste your Deepgram API key"
+              className="row-input input--mono"
+              placeholder="Paste key"
               value={deepgramApiKey}
               onChange={(e) => setDeepgramApiKey(e.target.value)}
               autoComplete="off"
               spellCheck={false}
             />
-            <button
-              type="submit"
-              disabled={saveStatus === 'saving'}
-              className={`btn ${saveStatus === 'success' ? 'btn-success' : 'btn-primary'}`}
-            >
+            <button type="submit" className="text-btn" disabled={saveStatus === 'saving'}>
               {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'success' ? 'Saved' : 'Save'}
             </button>
-          </div>
-          {saveStatus === 'error' ? (
-            <p className="field-help field-help--error" role="alert">{saveMessage}</p>
-          ) : (
-            <p className="field-help">
-              Get one at <a href="https://console.deepgram.com/" target="_blank" rel="noopener noreferrer">console.deepgram.com</a>
-            </p>
-          )}
-        </form>
+          </form>
 
-        <div className="field">
-          <span className="field-label" id="engine-label">Model</span>
-          <div className="choice-cards" role="radiogroup" aria-labelledby="engine-label">
-            {ENGINES.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                role="radio"
-                aria-checked={engine === option.id}
-                className={`choice-card ${engine === option.id ? 'is-selected' : ''}`}
-                onClick={() => onEngineChange(option.id)}
-              >
-                <span className="choice-card-title">
+          <div className="row">
+            <span className="row-label" id="engine-label">Model</span>
+            <div className="segmented segmented--small" role="radiogroup" aria-labelledby="engine-label">
+              {ENGINES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={engine === option.id}
+                  className="segmented-item"
+                  data-state={engine === option.id ? 'active' : 'inactive'}
+                  onClick={() => onEngineChange(option.id)}
+                >
                   {option.title}
-                  {option.id === 'flux' && <span className="badge">Default</span>}
-                </span>
-                <span className="choice-card-desc">{option.description}</span>
-              </button>
-            ))}
+                </button>
+              ))}
+            </div>
           </div>
-          <p className="field-help">Applies from the next recording.</p>
-        </div>
 
-        <div className="field field--row">
-          <div>
-            <label className="field-label" htmlFor="live-typing">Type as you speak</label>
-            <p className="field-help">
-              {liveTyping
-                ? 'Words appear in your text box as they\'re heard and are corrected in place. If some app misbehaves, turn this off.'
-                : 'Each phrase is pasted once Deepgram confirms it. Turn on to see words appear as you speak.'}
-            </p>
+          <div className="row">
+            <label className="row-label" htmlFor="live-typing">Type as you speak</label>
+            <Switch.Root className="switch-root" id="live-typing" checked={liveTyping} onCheckedChange={handleLiveTypingChange}>
+              <Switch.Thumb className="switch-thumb" />
+            </Switch.Root>
           </div>
-          <Switch.Root
-            className="switch-root"
-            id="live-typing"
-            checked={liveTyping}
-            onCheckedChange={handleLiveTypingChange}
-          >
-            <Switch.Thumb className="switch-thumb" />
-          </Switch.Root>
         </div>
+        {saveStatus === 'error' ? (
+          <p className="group-footnote group-footnote--error" role="alert">{saveMessage}</p>
+        ) : (
+          <p className="group-footnote">
+            {engineInfo.description} {liveTyping ? 'Words appear as you speak and are corrected in place.' : 'Each phrase is pasted once confirmed.'}{' '}
+            Get a key at <a href="https://console.deepgram.com/" target="_blank" rel="noopener noreferrer">console.deepgram.com</a>.
+          </p>
+        )}
+      </section>
 
-        <div className="field field--row">
-          <div>
-            <label className="field-label" htmlFor="voice-commands">Voice commands</label>
-            <p className="field-help">
-              Pause, say "{enterPhrase || 'period'}" on its own, then pause again to press Enter. Inside a sentence it's
-              typed as normal text. Applies from the next recording.
-            </p>
+      <section className="settings-section" aria-labelledby="settings-voice">
+        <h2 id="settings-voice" className="group-title">Voice commands</h2>
+        <div className="grouped">
+          <div className="row">
+            <label className="row-label" htmlFor="voice-commands">Press Enter by voice</label>
+            <Switch.Root className="switch-root" id="voice-commands" checked={voiceCommands} onCheckedChange={handleVoiceCommandsChange}>
+              <Switch.Thumb className="switch-thumb" />
+            </Switch.Root>
           </div>
-          <Switch.Root
-            className="switch-root"
-            id="voice-commands"
-            checked={voiceCommands}
-            onCheckedChange={handleVoiceCommandsChange}
-          >
-            <Switch.Thumb className="switch-thumb" />
-          </Switch.Root>
-        </div>
-
-        {voiceCommands && (
-          <form className="field" onSubmit={handleSaveEnterPhrase}>
-            <label className="field-label" htmlFor="enter-phrase">Phrase that presses Enter</label>
-            <div className="input-row">
+          {voiceCommands && (
+            <form className="row" onSubmit={handleSaveEnterPhrase}>
+              <label className="row-label" htmlFor="enter-phrase">Phrase</label>
               <input
                 id="enter-phrase"
                 type="text"
-                className="input"
+                className="row-input"
                 value={enterPhrase}
                 onChange={(e) => {
                   setEnterPhrase(e.target.value);
@@ -217,60 +192,50 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                 placeholder="period"
                 spellCheck={false}
               />
-              <button type="submit" className={`btn ${phraseStatus?.ok ? 'btn-success' : 'btn-primary'}`}>
-                {phraseStatus?.ok ? 'Saved' : 'Save'}
-              </button>
-            </div>
-            {phraseStatus && !phraseStatus.ok ? (
-              <p className="field-help field-help--error" role="alert">{phraseStatus.message}</p>
-            ) : (
-              <p className="field-help">
-                One to three words you'd never say on their own. It's sent to Deepgram so it's recognized reliably.
-              </p>
-            )}
-          </form>
+              <button type="submit" className="text-btn">{phraseStatus?.ok ? 'Saved' : 'Save'}</button>
+            </form>
+          )}
+        </div>
+        {phraseStatus && !phraseStatus.ok ? (
+          <p className="group-footnote group-footnote--error" role="alert">{phraseStatus.message}</p>
+        ) : (
+          <p className="group-footnote">
+            Pause, say “{enterPhrase || 'period'}” on its own, then pause again to press Enter. Inside a sentence it’s typed as a normal word.
+          </p>
         )}
       </section>
 
       <section className="settings-section" aria-labelledby="settings-shortcuts">
-        <h2 id="settings-shortcuts" className="section-heading">Shortcuts</h2>
-
-        <ShortcutRecorder
-          label="Start / stop recording"
-          description="Works from any app. F-keys like F9 are a good choice; plain letters or Space will also type in the focused app."
-          value={toggleShortcut}
-          emptyText="Not set"
-          listeningText="Press keys…"
-          isListening={listeningTarget === 'toggle'}
-          onListeningChange={listenForToggle}
-          onChange={onToggleShortcutChange}
-        />
-
-        <ShortcutRecorder
-          label="Hold to talk"
-          description="Hold to record, release to stop. Try F13–F24, CapsLock, or a key you rarely type."
-          value={holdShortcut}
-          emptyText="Not set"
-          listeningText="Press any key…"
-          isListening={listeningTarget === 'hold'}
-          onListeningChange={listenForHold}
-          onChange={onHoldShortcutChange}
-        />
-
-        <div className="field field--row">
-          <div>
-            <label className="field-label" htmlFor="push-to-talk">Push to talk in the app</label>
-            <p className="field-help">Hold the in-app mic button to record instead of clicking it.</p>
+        <h2 id="settings-shortcuts" className="group-title">Shortcuts</h2>
+        <div className="grouped">
+          <ShortcutRecorder
+            label="Start / stop"
+            description="F-keys like F9 work well; plain letters or Space also type in the focused app."
+            value={toggleShortcut}
+            emptyText="Not set"
+            listeningText="Press keys…"
+            isListening={listeningTarget === 'toggle'}
+            onListeningChange={listenForToggle}
+            onChange={onToggleShortcutChange}
+          />
+          <ShortcutRecorder
+            label="Hold to talk"
+            description="Hold to record, release to stop. Try F13–F24 or CapsLock."
+            value={holdShortcut}
+            emptyText="Not set"
+            listeningText="Press any key…"
+            isListening={listeningTarget === 'hold'}
+            onListeningChange={listenForHold}
+            onChange={onHoldShortcutChange}
+          />
+          <div className="row">
+            <label className="row-label" htmlFor="push-to-talk">Push to talk in the app</label>
+            <Switch.Root className="switch-root" id="push-to-talk" checked={pushToTalk} onCheckedChange={onPushToTalkChange}>
+              <Switch.Thumb className="switch-thumb" />
+            </Switch.Root>
           </div>
-          <Switch.Root
-            className="switch-root"
-            id="push-to-talk"
-            checked={pushToTalk}
-            onCheckedChange={onPushToTalkChange}
-          >
-            <Switch.Thumb className="switch-thumb" />
-          </Switch.Root>
         </div>
+        <p className="group-footnote">Shortcuts work from any app. With push to talk, hold the in-app mic button to record.</p>
       </section>
 
       <DictionarySettings />

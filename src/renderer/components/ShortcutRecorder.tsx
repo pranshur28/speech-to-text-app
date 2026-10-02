@@ -109,9 +109,12 @@ export const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
   const placeholder = isListening ? listeningText : emptyText;
 
   return (
-    <div className="field">
-      <span className="field-label">{label}</span>
-      <div className="input-row">
+    <div className="row row--stacked">
+      <div className="row-main">
+        <span className="row-label">
+          {label}
+          <span className="row-sublabel">{description}</span>
+        </span>
         <button
           type="button"
           className={`shortcut-field ${isListening ? 'is-listening' : ''}`}
@@ -128,13 +131,13 @@ export const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
           )}
         </button>
         {isListening ? (
-          <button type="button" className="btn btn-ghost" onClick={() => onListeningChange(false)}>
+          <button type="button" className="text-btn" onClick={() => onListeningChange(false)}>
             Cancel
           </button>
         ) : value ? (
           <button
             type="button"
-            className="btn btn-ghost"
+            className="text-btn text-btn--muted"
             onClick={() => {
               setWarning(null);
               onChange('');
@@ -144,11 +147,7 @@ export const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
           </button>
         ) : null}
       </div>
-      {warning ? (
-        <p className="field-help field-help--warning" role="alert">{warning}</p>
-      ) : (
-        <p className="field-help">{description}</p>
-      )}
+      {warning && <p className="row-note row-note--warning" role="alert">{warning}</p>}
     </div>
   );
 };

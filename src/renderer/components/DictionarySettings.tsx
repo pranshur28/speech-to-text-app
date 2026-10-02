@@ -140,24 +140,12 @@ export const DictionarySettings: React.FC = () => {
 
   return (
     <section className="settings-section" aria-labelledby="settings-dictionary">
-      <div className="section-heading-row">
-        <h2 id="settings-dictionary" className="section-heading">Dictionary</h2>
-        <button type="button" className="btn btn-primary btn-sm" onClick={openAddModal}>
+      <div className="group-title-row">
+        <h2 id="settings-dictionary" className="group-title">Dictionary</h2>
+        <button type="button" className="text-btn" onClick={openAddModal}>
           Add entry
         </button>
       </div>
-      <p className="field-help">
-        Replace what you say with your own text. Enabled entries are also sent to Deepgram as keyterms so names and
-        jargon are recognized correctly. To just teach a word, add it with itself as the replacement
-        (e.g. "Kubernetes" → "Kubernetes").
-      </p>
-      {keyterms && keyterms.count > 0 && (
-        <p className={`field-help ${keyterms.dropped ? 'field-help--warning' : ''}`}>
-          {keyterms.count} keyterm{keyterms.count === 1 ? '' : 's'} sent to Deepgram (~{keyterms.estimatedTokens} of 450 tokens)
-          {keyterms.dropped > 0 && ` — ${keyterms.dropped} newer entr${keyterms.dropped === 1 ? 'y' : 'ies'} over the limit still apply as replacements but aren't sent as keyterms`}
-        </p>
-      )}
-
       {isLoading ? (
         <p className="empty-hint">Loading…</p>
       ) : entries.length === 0 ? (
@@ -166,7 +154,7 @@ export const DictionarySettings: React.FC = () => {
           <p className="field-help">Add your first replacement to get started.</p>
         </div>
       ) : (
-        <ul className="dict-list">
+        <ul className="grouped dict-list">
           {entries.map((entry) => (
             <li key={entry.id} className={`dict-row ${entry.is_enabled ? '' : 'is-disabled'}`}>
               <div className="dict-row-main">
@@ -184,12 +172,12 @@ export const DictionarySettings: React.FC = () => {
                 >
                   <Switch.Thumb className="switch-thumb" />
                 </Switch.Root>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEditModal(entry)}>
+                <button type="button" className="text-btn" onClick={() => openEditModal(entry)}>
                   Edit
                 </button>
                 <button
                   type="button"
-                  className={`btn btn-sm ${confirmDeleteId === entry.id ? 'btn-danger' : 'btn-ghost'}`}
+                  className={`text-btn ${confirmDeleteId === entry.id ? 'text-btn--danger' : 'text-btn--muted'}`}
                   onClick={() => handleDeleteEntry(entry.id)}
                 >
                   {confirmDeleteId === entry.id ? 'Confirm' : 'Delete'}
@@ -199,6 +187,19 @@ export const DictionarySettings: React.FC = () => {
           ))}
         </ul>
       )}
+
+      <p className="group-footnote">
+        Replace what you say with your own text. Enabled entries are also sent to Deepgram as keyterms so names and
+        jargon are recognized correctly. To just teach a word, add it with itself as the replacement
+        (e.g. "Kubernetes" → "Kubernetes").
+      </p>
+      {keyterms && keyterms.count > 0 && (
+        <p className={`group-footnote ${keyterms.dropped ? 'group-footnote--warning' : ''}`}>
+          {keyterms.count} keyterm{keyterms.count === 1 ? '' : 's'} sent to Deepgram (~{keyterms.estimatedTokens} of 450 tokens)
+          {keyterms.dropped > 0 && ` — ${keyterms.dropped} newer entr${keyterms.dropped === 1 ? 'y' : 'ies'} over the limit still apply as replacements but aren't sent as keyterms`}
+        </p>
+      )}
+
 
       {/* Add/Edit Modal */}
       <Dialog.Root open={isAddModalOpen || editingEntry !== null} onOpenChange={(open) => !open && closeModal()}>

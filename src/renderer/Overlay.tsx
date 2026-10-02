@@ -29,6 +29,10 @@ export default function Overlay() {
   const targets = useRef(new Float32Array(BAR_COUNT));
   const levels = useRef(new Float32Array(BAR_COUNT));
   const barRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  // Overall voice level drives the halo's (subtle) brightness via a CSS variable
+  const targetVolume = useRef(0);
+  const volume = useRef(0);
+  const shellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     phaseRef.current = state.phase;
@@ -47,6 +51,7 @@ export default function Overlay() {
     });
 
     const unsubAudio = window.electronAPI.onAudioData((data: any) => {
+      targetVolume.current = Math.min(1, Number(data?.volume) || 0);
       const waveform: number[] | undefined = data?.waveform;
       if (!waveform) return;
       for (let i = 0; i < BAR_COUNT; i++) {
@@ -110,6 +115,10 @@ export default function Overlay() {
           bar.style.transform = `scaleY(${scale.toFixed(3)})`;
         }
       }
+      const volumeTarget = phase === 'listening' ? targetVolume.current : 0;
+      volume.current += (volumeTarget - volume.current) * (volumeTarget > volume.current ? 0.25 : 0.06);
+      shellRef.current?.style.setProperty('--level', volume.current.toFixed(3));
+
       frame = requestAnimationFrame(tick);
     };
 
@@ -135,8 +144,9 @@ export default function Overlay() {
   return (
     <div className="overlay-root">
       <div
+        ref={shellRef}
         className={[
-          'pill',
+          'pill-shell',
           `pill--${phase}`,
           phase !== 'hidden' ? 'is-shown' : '',
           expanded ? 'is-expanded' : '',
@@ -147,46 +157,55 @@ export default function Overlay() {
         role="status"
         aria-label={`${PHASE_LABELS[phase]}, ${timeText}`}
       >
-        <span className="pill-indicator" aria-hidden="true">
-          {phase === 'finishing' ? <span className="pill-spinner" /> : <span className="pill-dot" />}
-        </span>
+        <span className="pill-halo" aria-hidden="true" />
+        <span className="pill-ring" aria-hidden="true" />
+        <div className="pill">
+          <span className="pill-indicator" aria-hidden="true">
+            {phase === 'finishing' ? <span className="pill-spinner" /> : <span className="pill-dot" />}
+          </span>
 
-        <span className="pill-bars" aria-hidden="true">
-          {Array.from({ length: BAR_COUNT }, (_, i) => (
-            <span key={i} className="pill-bar" ref={(el) => { barRefs.current[i] = el; }} />
-          ))}
-        </span>
+          <span className="pill-bars" aria-hidden="true">
+            {Array.from({ length: BAR_COUNT }, (_, i) => (
+              <span
+                key={i}
+                className="pill-bar"
+                data-tier={Math.min(3, Math.floor(Math.abs(i - CENTER) / 2))}
+                ref={(el) => { barRefs.current[i] = el; }}
+              />
+            ))}
+          </span>
 
-        <span className="pill-extra">
-          <span className="pill-timer">{phase === 'connecting' ? 'Connecting' : timeText}</span>
-          {showControls && (
-            <>
-              <span className="pill-divider" aria-hidden="true" />
-              <button
-                type="button"
-                className="pill-btn"
-                onClick={() => window.electronAPI.overlayAction(phase === 'paused' ? 'resume' : 'pause')}
-                aria-label={phase === 'paused' ? 'Resume' : 'Pause'}
-                title={phase === 'paused' ? 'Resume' : 'Pause'}
-              >
-                {phase === 'paused' ? (
-                  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z" /></svg>
-                ) : (
-                  <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1" /><rect x="9.5" y="2.5" width="3" height="11" rx="1" /></svg>
-                )}
-              </button>
-              <button
-                type="button"
-                className="pill-btn pill-btn--stop"
-                onClick={() => window.electronAPI.overlayAction('stop')}
-                aria-label="Stop"
-                title="Stop"
-              >
-                <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2.2" /></svg>
-              </button>
-            </>
-          )}
-        </span>
+          <span className="pill-extra">
+            <span className="pill-timer">{phase === 'connecting' ? 'Connecting' : timeText}</span>
+            {showControls && (
+              <>
+                <span className="pill-divider" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="pill-btn"
+                  onClick={() => window.electronAPI.overlayAction(phase === 'paused' ? 'resume' : 'pause')}
+                  aria-label={phase === 'paused' ? 'Resume' : 'Pause'}
+                  title={phase === 'paused' ? 'Resume' : 'Pause'}
+                >
+                  {phase === 'paused' ? (
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z" /></svg>
+                  ) : (
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1" /><rect x="9.5" y="2.5" width="3" height="11" rx="1" /></svg>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="pill-btn pill-btn--stop"
+                  onClick={() => window.electronAPI.overlayAction('stop')}
+                  aria-label="Stop"
+                  title="Stop"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2.4" /></svg>
+                </button>
+              </>
+            )}
+          </span>
+        </div>
       </div>
     </div>
   );

@@ -1,15 +1,26 @@
-/* Recording pill — a single solid capsule. A transparent window can't blur the desktop
-   behind it, so the surface is near-opaque instead of frosted. */
+/* Recording pill — a black capsule with a subtle, slowly drifting colour edge and a faint halo.
+   A transparent window can't blur the desktop behind it, so the surface is opaque. */
+
+/* Animatable angle so the ring's colours can drift around the capsule */
+@property --angle {
+    syntax: '<angle>';
+    inherits: true;
+    initial-value: 200deg;
+}
 
 .overlay-root {
-    --pill-bg: rgba(22, 22, 26, 0.96);
-    --pill-border: rgba(255, 255, 255, 0.09);
+    --pill-bg: #08080b;
     --pill-text: rgba(255, 255, 255, 0.92);
     --pill-muted: rgba(255, 255, 255, 0.62);
-    --rec: #ef4444;
-    --paused: #f59e0b;
-    --idle: #a1a1aa;
+    --paused: #ff9f0a;
+    --idle: #8e8e93;
     --ease: cubic-bezier(0.2, 0, 0, 1);
+
+    /* Palette: softened blue → violet → pink → amber */
+    --c1: #5b8cff;
+    --c2: #9f6bff;
+    --c3: #ff5fa8;
+    --c4: #ffa552;
 
     display: flex;
     align-items: center;
@@ -20,37 +31,109 @@
     user-select: none;
 }
 
-.pill {
-    display: flex;
-    align-items: center;
-    height: 36px;
-    padding: 0 14px 0 13px;
-    background: var(--pill-bg);
-    border: 1px solid var(--pill-border);
+/* ---- Shell: ring + halo + capsule ---- */
+
+.pill-shell {
+    --level: 0;
+    position: relative;
     border-radius: 999px;
-    /* Kept within the window's transparent margin so it never gets clipped */
-    box-shadow:
-        0 4px 14px rgba(0, 0, 0, 0.34),
-        0 1px 3px rgba(0, 0, 0, 0.25),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    color: var(--pill-text);
 
     /* Enter/exit */
     opacity: 0;
     transform: translateY(8px) scale(0.94);
     transition:
-        opacity 160ms var(--ease),
-        transform 180ms var(--ease),
-        padding 200ms var(--ease);
+        opacity 180ms var(--ease),
+        transform 220ms var(--ease);
+    animation: pill-drift 8s linear infinite;
 }
 
-.pill.is-shown {
+.pill-shell.is-shown {
     opacity: 1;
     transform: none;
 }
 
-.pill.is-expanded.has-controls {
+.pill-ring,
+.pill-halo {
+    position: absolute;
+    border-radius: 999px;
+    background: conic-gradient(from var(--angle), var(--c1), var(--c2), var(--c3), var(--c4), var(--c1));
+    transition: opacity 400ms var(--ease);
+    pointer-events: none;
+}
+
+/* A 1px coloured edge, kept soft */
+.pill-ring {
+    inset: -1px;
+    opacity: 0.6;
+}
+
+/* Faint glow just outside the edge; breathes a little with the voice */
+.pill-halo {
+    inset: -2px;
+    filter: blur(9px);
+    opacity: calc(0.14 + var(--level) * 0.26);
+    transition: none;
+}
+
+.pill {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 38px;
+    padding: 0 15px 0 14px;
+    border-radius: 999px;
+    background: var(--pill-bg);
+    box-shadow:
+        0 6px 18px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    color: var(--pill-text);
+    transition:
+        height 220ms var(--ease),
+        padding 220ms var(--ease);
+}
+
+.pill-shell.is-expanded .pill {
+    height: 46px;
+}
+
+.pill-shell.is-expanded.has-controls .pill {
     padding-right: 5px;
+}
+
+/* ---- States ---- */
+
+/* Connecting: a single soft arc circles the pill */
+.pill--connecting {
+    animation-duration: 1.6s;
+}
+
+.pill--connecting .pill-ring,
+.pill--connecting .pill-halo {
+    background: conic-gradient(from var(--angle), var(--c1), rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0) 70%, var(--c3));
+}
+
+.pill--connecting .pill-halo {
+    opacity: 0.18;
+}
+
+/* Paused: colour drains to a neutral edge */
+.pill--paused {
+    animation-play-state: paused;
+}
+
+.pill--paused .pill-ring {
+    background: rgba(255, 255, 255, 0.16);
+    opacity: 1;
+}
+
+.pill--paused .pill-halo,
+.pill--finishing .pill-halo,
+.pill--hidden .pill-halo {
+    opacity: 0;
+}
+
+.pill--finishing .pill-ring {
+    opacity: 0.3;
 }
 
 /* ---- Status indicator ---- */
@@ -65,16 +148,16 @@
 }
 
 .pill-dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: var(--idle);
-    transition: background 200ms var(--ease);
+    transition: background 200ms var(--ease), box-shadow 200ms var(--ease);
 }
 
 .pill--listening .pill-dot {
-    background: var(--rec);
-    animation: pill-rec 1.6s ease-in-out infinite;
+    background: #ffffff;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
 }
 
 .pill--connecting .pill-dot {
@@ -88,18 +171,19 @@
 .pill-spinner {
     width: 10px;
     height: 10px;
+    box-sizing: border-box;
     border-radius: 50%;
     border: 1.5px solid rgba(255, 255, 255, 0.2);
     border-top-color: var(--pill-text);
     animation: pill-spin 0.7s linear infinite;
 }
 
-/* ---- Level bars ---- */
+/* ---- Level bars: white, with a faint tint toward the edges ---- */
 
 .pill-bars {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 2.5px;
     height: 18px;
 }
 
@@ -107,14 +191,20 @@
     width: 3px;
     height: 18px;
     border-radius: 2px;
-    background: rgba(255, 255, 255, 0.88);
+    background: #ffffff;
     transform: scaleY(0.14);
     will-change: transform;
+    transition: opacity 200ms var(--ease);
 }
 
+.pill-bar[data-tier='1'] { background: linear-gradient(180deg, #ffffff, #d6cbff); }
+.pill-bar[data-tier='2'] { background: linear-gradient(180deg, #ffffff, #ffc4df); }
+.pill-bar[data-tier='3'] { background: linear-gradient(180deg, #ffffff, #ffd5b0); }
+
 .pill--paused .pill-bar,
-.pill--finishing .pill-bar {
-    background: rgba(255, 255, 255, 0.35);
+.pill--finishing .pill-bar,
+.pill--connecting .pill-bar {
+    opacity: 0.4;
 }
 
 /* ---- Hover reveal: timer + controls ---- */
@@ -126,22 +216,21 @@
     overflow: hidden;
     opacity: 0;
     transition:
-        max-width 220ms var(--ease),
-        opacity 160ms var(--ease);
+        max-width 240ms var(--ease),
+        opacity 180ms var(--ease);
 }
 
-.pill.is-expanded .pill-extra {
-    max-width: 160px;
+.pill-shell.is-expanded .pill-extra {
+    max-width: 170px;
     opacity: 1;
 }
 
 .pill-timer {
-    margin-left: 12px;
-    font-size: 12px;
-    font-weight: 500;
+    margin-left: 13px;
+    font-size: 13px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.01em;
-    color: var(--pill-muted);
+    color: rgba(255, 255, 255, 0.88);
     white-space: nowrap;
 }
 
@@ -151,44 +240,49 @@
 
 .pill-divider {
     width: 1px;
-    height: 16px;
+    height: 18px;
     margin: 0 6px 0 12px;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.14);
     flex-shrink: 0;
 }
 
 .pill-btn {
     display: grid;
     place-items: center;
-    width: 26px;
-    height: 26px;
+    width: 34px;
+    height: 34px;
+    margin-left: 2px;
     padding: 0;
     border: none;
     border-radius: 50%;
-    background: transparent;
-    color: var(--pill-text);
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background 120ms var(--ease), color 120ms var(--ease);
+    transition: background 120ms var(--ease), transform 120ms var(--ease);
 }
 
 .pill-btn svg {
-    width: 12px;
-    height: 12px;
+    width: 11px;
+    height: 11px;
     fill: currentColor;
 }
 
 .pill-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .pill-btn:active {
-    background: rgba(255, 255, 255, 0.16);
+    transform: scale(0.94);
+}
+
+.pill-btn--stop {
+    background: #ffffff;
+    color: #08080b;
 }
 
 .pill-btn--stop:hover {
-    background: rgba(239, 68, 68, 0.18);
-    color: #fca5a5;
+    background: rgba(255, 255, 255, 0.86);
 }
 
 .pill-btn:focus-visible {
@@ -198,9 +292,8 @@
 
 /* ---- Motion ---- */
 
-@keyframes pill-rec {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
-    50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+@keyframes pill-drift {
+    to { --angle: 560deg; }
 }
 
 @keyframes pill-blink {
@@ -213,13 +306,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .pill,
-    .pill-extra {
-        transition-duration: 0.01ms;
-    }
-
+    .pill-shell,
     .pill-dot,
     .pill-spinner {
         animation: none !important;
+    }
+
+    .pill-shell,
+    .pill,
+    .pill-extra {
+        transition-duration: 0.01ms;
     }
 }

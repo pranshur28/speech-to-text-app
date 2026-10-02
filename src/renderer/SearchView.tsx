@@ -4,8 +4,8 @@ import { NoteList, Note } from './components/NoteList';
 import { FilterPanel, Filters } from './components/FilterPanel';
 import { NoteDetailModal, NoteDetail } from './components/NoteDetailModal';
 
-// Card height used by the virtualized list (3-line preview + header + spacing)
-const NOTE_ROW_HEIGHT = 132;
+// Row height for the virtualized list: date line + up to 3 lines of preview + spacing
+const NOTE_ROW_HEIGHT = 112;
 
 interface SearchViewProps {
   /** True while the History tab is visible; used to refresh after new dictations. */
@@ -123,6 +123,10 @@ export const SearchView: React.FC<SearchViewProps> = ({ isActive }) => {
 
   return (
     <div className="history">
+      <div className="history-header">
+        <h1 className="large-title">History</h1>
+        <span className="history-count" aria-live="polite">{isLoading && notes.length === 0 ? 'Loading…' : countText}</span>
+      </div>
       <div className="history-toolbar">
         <SearchBar onSearch={setSearchQuery} />
         <FilterPanel
@@ -132,7 +136,6 @@ export const SearchView: React.FC<SearchViewProps> = ({ isActive }) => {
         />
       </div>
 
-      <div className="history-count" aria-live="polite">{isLoading && notes.length === 0 ? 'Loading…' : countText}</div>
 
       <div className="history-list" ref={listRef}>
         {listHeight > 0 && (
