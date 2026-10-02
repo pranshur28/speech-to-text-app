@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { shortcutKeys } from '../format';
 
 // Map a DOM key to the name the main-process shortcut parser understands.
 // Returns null for modifier-only presses.
@@ -93,7 +94,7 @@ export const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
       const hasModifiers = e.metaKey || e.ctrlKey || e.altKey || (e.shiftKey && triggerKey.length > 1);
       const isCommonKey = /^[A-Z]$/.test(triggerKey) || triggerKey === 'Space';
       setWarning(!hasModifiers && isCommonKey
-        ? `Using "${triggerKey}" alone will capture it globally. This may interfere with typing in other apps.`
+        ? `"${triggerKey}" on its own is captured everywhere, so it may get in the way of typing.`
         : null);
 
       onChange(keys.join('+'));
@@ -104,49 +105,49 @@ export const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isListening, onChange, onListeningChange]);
 
+  const shownKeys = isListening ? pressedKeys.map((key) => shortcutKeys(key)[0]) : shortcutKeys(value);
+  const placeholder = isListening ? listeningText : emptyText;
+
   return (
-    <div className="setting-group">
-      <label className="setting-label">{label}</label>
-      <div className="setting-description" style={{ marginBottom: '8px' }}>
-        {description}
-      </div>
-      <div className="shortcut-recorder">
-        <div
-          className={`shortcut-display ${isListening ? 'recording' : ''}`}
+    <div className="field">
+      <span className="field-label">{label}</span>
+      <div className="input-row">
+        <button
+          type="button"
+          className={`shortcut-field ${isListening ? 'is-listening' : ''}`}
           onClick={() => {
             setWarning(null);
             onListeningChange(true);
           }}
+          aria-label={`${label}: ${value || emptyText}. Click to change.`}
         >
-          {isListening
-            ? (pressedKeys.length > 0 ? pressedKeys.join('+') : listeningText)
-            : (value || emptyText)}
-        </div>
+          {shownKeys.length > 0 ? (
+            <span className="kbd-group">{shownKeys.map((key) => <kbd key={key}>{key}</kbd>)}</span>
+          ) : (
+            <span className="shortcut-placeholder">{placeholder}</span>
+          )}
+        </button>
         {isListening ? (
-          <button className="cancel-record-btn" onClick={(e) => {
-            e.stopPropagation();
-            onListeningChange(false);
-          }}>Cancel</button>
-        ) : (
-          <button className="reset-btn" onClick={() => {
-            setWarning(null);
-            onChange('');
-          }} title="Clear Shortcut">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
+          <button type="button" className="btn btn-ghost" onClick={() => onListeningChange(false)}>
+            Cancel
           </button>
-        )}
+        ) : value ? (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => {
+              setWarning(null);
+              onChange('');
+            }}
+          >
+            Clear
+          </button>
+        ) : null}
       </div>
-      {warning && (
-        <div className="error-message" style={{
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          border: '1px solid var(--accent-warning)',
-          color: 'var(--accent-warning)'
-        }}>
-          ⚠️ {warning}
-        </div>
+      {warning ? (
+        <p className="field-help field-help--warning" role="alert">{warning}</p>
+      ) : (
+        <p className="field-help">{description}</p>
       )}
     </div>
   );

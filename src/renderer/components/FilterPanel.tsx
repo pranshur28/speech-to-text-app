@@ -1,21 +1,37 @@
 import React from 'react';
-import * as Checkbox from '@radix-ui/react-checkbox';
-import * as Label from '@radix-ui/react-label';
+
+export interface Filters {
+  isFavorite?: boolean;
+  startDate?: number;
+  endDate?: number;
+  tags?: string[];
+}
 
 export interface FilterPanelProps {
-  onFilterChange: (filters: {
-    isFavorite?: boolean;
-    startDate?: number;
-    endDate?: number;
-    tags?: string[];
-  }) => void;
+  onFilterChange: (filters: Filters) => void;
   availableTags?: string[];
-  currentFilters: {
-    isFavorite?: boolean;
-    startDate?: number;
-    endDate?: number;
-    tags?: string[];
-  };
+  currentFilters: Filters;
+}
+
+// <input type="date"> values are local calendar days; convert to/from local timestamps
+export function dayStart(value: string): number | undefined {
+  if (!value) return undefined;
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, m - 1, d).getTime();
+}
+
+export function dayEnd(value: string): number | undefined {
+  if (!value) return undefined;
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+}
+
+export function toDateInput(timestamp?: number): string {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${mm}-${dd}`;
 }
 
 export const FilterPanel: React.FC<FilterPanelProps> = ({
@@ -23,19 +39,10 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   availableTags = [],
   currentFilters,
 }) => {
-  const handleFavoriteToggle = (checked: boolean) => {
+  const handleFavoriteToggle = () => {
     onFilterChange({
       ...currentFilters,
-      isFavorite: checked ? true : undefined,
-    });
-  };
-
-  const handleDateChange = (type: 'start' | 'end', value: string) => {
-    const timestamp = value ? new Date(value).getTime() : undefined;
-
-    onFilterChange({
-      ...currentFilters,
-      [type === 'start' ? 'startDate' : 'endDate']: timestamp,
+      isFavorite: currentFilters.isFavorite ? undefined : true,
     });
   };
 
@@ -51,10 +58,6 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     });
   };
 
-  const handleClearFilters = () => {
-    onFilterChange({});
-  };
-
   const hasActiveFilters =
     currentFilters.isFavorite ||
     currentFilters.startDate ||
@@ -62,90 +65,57 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     (currentFilters.tags && currentFilters.tags.length > 0);
 
   return (
-    <div className="filter-panel">
-      <div className="filter-panel-header">
-        <h3>Filters</h3>
-        {hasActiveFilters && (
-          <button
-            className="filter-clear"
-            onClick={handleClearFilters}
-            type="button"
-          >
-            Clear All
-          </button>
-        )}
-      </div>
+    <div className="filter-bar" role="group" aria-label="Filters">
+      <button
+        type="button"
+        className={`chip ${currentFilters.isFavorite ? 'is-active' : ''}`}
+        aria-pressed={!!currentFilters.isFavorite}
+        onClick={handleFavoriteToggle}
+      >
+        <svg viewBox="0 0 20 20" width="14" height="14" fill={currentFilters.isFavorite ? 'currentColor' : 'none'} aria-hidden="true">
+          <path d="M10 15.27L16.18 19l-1.64-7.03L20 7.24l-7.19-.61L10 0 7.19 6.63 0 7.24l5.46 4.73L3.82 19z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+        Favorites
+      </button>
 
-      <div className="filter-section">
-        <div className="filter-checkbox-row">
-          <Checkbox.Root
-            className="checkbox-root"
-            checked={currentFilters.isFavorite || false}
-            onCheckedChange={handleFavoriteToggle}
-            id="favorites-filter"
-          >
-            <Checkbox.Indicator className="checkbox-indicator">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </Checkbox.Indicator>
-          </Checkbox.Root>
-          <Label.Root className="checkbox-label" htmlFor="favorites-filter">
-            Favorites only
-          </Label.Root>
-        </div>
-      </div>
+      <label className="date-field">
+        <span>From</span>
+        <input
+          type="date"
+          className="input input--compact"
+          value={toDateInput(currentFilters.startDate)}
+          max={toDateInput(currentFilters.endDate) || undefined}
+          onChange={(e) => onFilterChange({ ...currentFilters, startDate: dayStart(e.target.value) })}
+        />
+      </label>
 
-      <div className="filter-section">
-        <h4>Date Range</h4>
-        <div className="filter-date">
-          <label className="filter-date-label">
-            <span>From:</span>
-            <input
-              type="date"
-              className="filter-date-input"
-              value={
-                currentFilters.startDate
-                  ? new Date(currentFilters.startDate).toISOString().split('T')[0]
-                  : ''
-              }
-              onChange={(e) => handleDateChange('start', e.target.value)}
-            />
-          </label>
-          <label className="filter-date-label">
-            <span>To:</span>
-            <input
-              type="date"
-              className="filter-date-input"
-              value={
-                currentFilters.endDate
-                  ? new Date(currentFilters.endDate).toISOString().split('T')[0]
-                  : ''
-              }
-              onChange={(e) => handleDateChange('end', e.target.value)}
-            />
-          </label>
-        </div>
-      </div>
+      <label className="date-field">
+        <span>To</span>
+        <input
+          type="date"
+          className="input input--compact"
+          value={toDateInput(currentFilters.endDate)}
+          min={toDateInput(currentFilters.startDate) || undefined}
+          onChange={(e) => onFilterChange({ ...currentFilters, endDate: dayEnd(e.target.value) })}
+        />
+      </label>
 
-      {availableTags.length > 0 && (
-        <div className="filter-section">
-          <h4>Tags</h4>
-          <div className="filter-tags">
-            {availableTags.map((tag) => (
-              <button
-                key={tag}
-                className={`filter-tag ${
-                  currentFilters.tags?.includes(tag) ? 'filter-tag--active' : ''
-                }`}
-                onClick={() => handleTagToggle(tag)}
-                type="button"
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-        </div>
+      {availableTags.map((tag) => (
+        <button
+          key={tag}
+          type="button"
+          className={`chip ${currentFilters.tags?.includes(tag) ? 'is-active' : ''}`}
+          aria-pressed={!!currentFilters.tags?.includes(tag)}
+          onClick={() => handleTagToggle(tag)}
+        >
+          #{tag}
+        </button>
+      ))}
+
+      {hasActiveFilters && (
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onFilterChange({})}>
+          Clear
+        </button>
       )}
     </div>
   );

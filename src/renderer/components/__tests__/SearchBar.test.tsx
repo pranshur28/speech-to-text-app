@@ -35,13 +35,12 @@ describe('SearchBar', () => {
       expect(searchIcon).toBeInTheDocument();
     });
 
-    it('should show keyboard hint', () => {
+    it('should advertise the Ctrl+F shortcut to assistive tech', () => {
       const mockOnSearch = jest.fn();
       render(<SearchBar onSearch={mockOnSearch} />);
 
-      expect(screen.getByText(/Press/i)).toBeInTheDocument();
-      expect(screen.getByText('⌘F')).toBeInTheDocument();
-      expect(screen.getByText(/to focus/i)).toBeInTheDocument();
+      const input = screen.getByPlaceholderText('Search transcriptions...');
+      expect(input).toHaveAttribute('aria-keyshortcuts', 'Control+F');
     });
 
     it('should not show clear button when input is empty', () => {

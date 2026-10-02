@@ -1,25 +1,42 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { SearchBar } from './components/SearchBar';
 import { NoteList, Note } from './components/NoteList';
-import { FilterPanel } from './components/FilterPanel';
-import { NoteDetailModal } from './components/NoteDetailModal';
+import { FilterPanel, Filters } from './components/FilterPanel';
+import { NoteDetailModal, NoteDetail } from './components/NoteDetailModal';
+
+// Card height used by the virtualized list (3-line preview + header + spacing)
+const NOTE_ROW_HEIGHT = 132;
 
 interface SearchViewProps {
-  onClose?: () => void;
+  /** True while the History tab is visible; used to refresh after new dictations. */
+  isActive: boolean;
 }
 
-export const SearchView: React.FC<SearchViewProps> = ({ onClose }) => {
+// Track an element's height so the virtualized list fills the available space
+function useElementHeight<T extends HTMLElement>(): [React.RefObject<T>, number] {
+  const ref = useRef<T>(null);
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => setHeight(Math.floor(entry.contentRect.height)));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, height];
+}
+
+export const SearchView: React.FC<SearchViewProps> = ({ isActive }) => {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedNote, setSelectedNote] = useState<any | null>(null);
-  const [filters, setFilters] = useState<{
-    isFavorite?: boolean;
-    startDate?: number;
-    endDate?: number;
-    tags?: string[];
-  }>({});
-  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [selectedNote, setSelectedNote] = useState<NoteDetail | null>(null);
+  const [filters, setFilters] = useState<Filters>({});
+  const [availableTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [listRef, listHeight] = useElementHeight<HTMLDivElement>();
 
   // Load notes based on search query and filters
   const loadNotes = useCallback(async () => {
@@ -38,6 +55,7 @@ export const SearchView: React.FC<SearchViewProps> = ({ onClose }) => {
           tags: [], // Tags will be populated when we implement tag functionality
         }));
         setNotes(formattedNotes);
+        setTotal('total' in result ? (result as { total: number }).total : formattedNotes.length);
       }
     } catch (error) {
       console.error('Error loading notes:', error);
@@ -46,19 +64,23 @@ export const SearchView: React.FC<SearchViewProps> = ({ onClose }) => {
     }
   }, [searchQuery, filters]);
 
-  // Load notes when query or filters change
+  // Reload when query/filters change or the tab becomes visible
   useEffect(() => {
-    loadNotes();
-  }, [loadNotes]);
+    if (isActive) loadNotes();
+  }, [loadNotes, isActive]);
 
   const handleNoteClick = async (note: Note) => {
     try {
       const result = await window.electronAPI.dbGetTranscription(note.id);
-      if (result.success) {
+      if (result.success && result.transcription) {
+        const t = result.transcription;
         setSelectedNote({
-          ...result.transcription,
-          text: result.transcription.formatted_text,
-          rawText: result.transcription.raw_text,
+          id: t.id,
+          text: t.formatted_text,
+          rawText: t.raw_text,
+          timestamp: t.timestamp,
+          isFavorite: Boolean(t.is_favorite),
+          tags: [],
         });
       }
     } catch (error) {
@@ -69,89 +91,70 @@ export const SearchView: React.FC<SearchViewProps> = ({ onClose }) => {
   const handleToggleFavorite = async (id: number) => {
     try {
       await window.electronAPI.dbToggleFavorite(id);
-      // Reload notes to reflect the change
       loadNotes();
     } catch (error) {
       console.error('Error toggling favorite:', error);
     }
   };
 
-  const handleCopy = () => {
-    if (selectedNote) {
-      navigator.clipboard.writeText(selectedNote.text);
-      // Could add a toast notification here
-    }
-  };
-
   const handleDelete = async () => {
-    if (selectedNote) {
-      try {
-        await window.electronAPI.dbDeleteTranscription(selectedNote.id);
-        setSelectedNote(null);
-        loadNotes();
-      } catch (error) {
-        console.error('Error deleting note:', error);
-      }
+    if (!selectedNote) return;
+    try {
+      await window.electronAPI.dbDeleteTranscription(selectedNote.id);
+      setSelectedNote(null);
+      loadNotes();
+    } catch (error) {
+      console.error('Error deleting note:', error);
     }
   };
 
   const handleModalToggleFavorite = async () => {
-    if (selectedNote) {
-      await handleToggleFavorite(selectedNote.id);
-      // Update the selected note's favorite status
-      setSelectedNote({
-        ...selectedNote,
-        isFavorite: !selectedNote.isFavorite,
-      });
-    }
+    if (!selectedNote) return;
+    await handleToggleFavorite(selectedNote.id);
+    setSelectedNote({ ...selectedNote, isFavorite: !selectedNote.isFavorite });
   };
 
+  const hasFilters = !!(searchQuery || filters.isFavorite || filters.startDate || filters.endDate);
+  const countText = total === null
+    ? ''
+    : total > notes.length
+      ? `Showing ${notes.length} of ${total}`
+      : `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`;
+
   return (
-    <div className="search-view">
-      <div className="search-view-header">
-        <h1>Search Transcriptions</h1>
-        {onClose && (
-          <button onClick={onClose} className="search-view-close" type="button">
-            ← Back to Recording
-          </button>
-        )}
+    <div className="history">
+      <div className="history-toolbar">
+        <SearchBar onSearch={setSearchQuery} />
+        <FilterPanel
+          onFilterChange={setFilters}
+          availableTags={availableTags}
+          currentFilters={filters}
+        />
       </div>
 
-      <div className="search-view-main">
-        <div className="search-view-sidebar">
-          <FilterPanel
-            onFilterChange={setFilters}
-            availableTags={availableTags}
-            currentFilters={filters}
+      <div className="history-count" aria-live="polite">{isLoading && notes.length === 0 ? 'Loading…' : countText}</div>
+
+      <div className="history-list" ref={listRef}>
+        {listHeight > 0 && (
+          <NoteList
+            notes={notes}
+            onNoteClick={handleNoteClick}
+            onToggleFavorite={handleToggleFavorite}
+            selectedNoteId={selectedNote?.id}
+            height={listHeight}
+            itemHeight={NOTE_ROW_HEIGHT}
+            emptyMessage={
+              hasFilters
+                ? searchQuery ? `No results for "${searchQuery}"` : 'No notes match these filters'
+                : 'No transcriptions yet'
+            }
           />
-        </div>
-
-        <div className="search-view-content">
-          <SearchBar onSearch={setSearchQuery} />
-
-          {isLoading ? (
-            <div className="search-view-loading">Loading...</div>
-          ) : (
-            <NoteList
-              notes={notes}
-              onNoteClick={handleNoteClick}
-              onToggleFavorite={handleToggleFavorite}
-              selectedNoteId={selectedNote?.id}
-              height={window.innerHeight - 200}
-              emptyMessage={
-                searchQuery
-                  ? `No results found for "${searchQuery}"`
-                  : 'No transcriptions yet'
-              }
-            />
-          )}
-        </div>
+        )}
       </div>
 
       <NoteDetailModal
         note={selectedNote}
         onClose={() => setSelectedNote(null)}
-        onCopy={handleCopy}
         onDelete={handleDelete}
         onToggleFavorite={handleModalToggleFavorite}
       />

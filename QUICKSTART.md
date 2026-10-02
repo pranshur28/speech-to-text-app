@@ -141,9 +141,8 @@ speech-to-text-app/
 │           ├── NoteDetailModal.tsx      # Full note view
 │           ├── FilterPanel.tsx          # Search filters
 │           ├── DictionarySettings.tsx   # Dictionary management UI
-│           ├── PersistentHeader.tsx     # Status header
-│           ├── TabBar.tsx               # Navigation tabs
-│           ├── ContextualFooter.tsx     # Action buttons
+│           ├── TopBar.tsx               # Status + tab navigation
+│           ├── ContextualFooter.tsx     # Working keyboard shortcut hints
 │           └── ErrorBoundary.tsx        # Error handling
 ├── scripts/
 │   └── jest-electron.js                 # Runs Jest under Electron's Node.js

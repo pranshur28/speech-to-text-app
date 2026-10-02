@@ -35,8 +35,12 @@ let isAppQuitting = false;
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 820,
+    height: 640,
+    minWidth: 560,
+    minHeight: 480,
+    backgroundColor: '#111114', // matches --bg so there's no white flash on launch
+    autoHideMenuBar: true, // menu (and its Ctrl+C/V roles) still works; Alt shows it
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -81,10 +85,14 @@ const createWindow = () => {
   });
 };
 
+// Overlay: waveform pill with a live-text bubble above it
+const OVERLAY_WIDTH = 460;
+const OVERLAY_HEIGHT = 130;
+
 const createOverlayWindow = () => {
   overlayWindow = new BrowserWindow({
-    width: 240,
-    height: 65,
+    width: OVERLAY_WIDTH,
+    height: OVERLAY_HEIGHT,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -101,10 +109,13 @@ const createOverlayWindow = () => {
     y: 0
   });
 
+  // Bottom-center of the primary display's work area (respects taskbar position)
   const { screen } = require('electron');
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
-  overlayWindow.setPosition(Math.round(width / 2 - 120), height - 80);
+  const { x, y, width, height } = screen.getPrimaryDisplay().workArea;
+  overlayWindow.setPosition(
+    Math.round(x + width / 2 - OVERLAY_WIDTH / 2),
+    Math.round(y + height - OVERLAY_HEIGHT - 8)
+  );
 
   const isDev = !app.isPackaged;
   const startUrl = isDev

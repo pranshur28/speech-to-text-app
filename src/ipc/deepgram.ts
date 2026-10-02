@@ -57,9 +57,13 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
     const keyterms = ctx.getDictionaryService()?.getKeyterms().terms ?? [];
     const svc = new DeepgramStreamingService(apiKey, engine, keyterms);
 
-    // Forward live transcript chunks to the renderer, and paste finals immediately
+    // Forward live transcript chunks to the main window and overlay, and paste finals immediately
     svc.setTranscriptCallback((text, isFinal) => {
       sendToMain('deepgram:transcript', { text, isFinal });
+      const overlay = ctx.getOverlayWindow();
+      if (overlay && !overlay.isDestroyed()) {
+        overlay.webContents.send('deepgram:transcript', { text, isFinal });
+      }
       if (isFinal && text.trim()) {
         queuePaste(text);
       }

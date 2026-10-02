@@ -12,6 +12,12 @@ interface DictionaryEntry {
   updated_at: number;
 }
 
+interface KeytermSummary {
+  count: number;
+  estimatedTokens: number;
+  dropped: number;
+}
+
 export const DictionarySettings: React.FC = () => {
   const [entries, setEntries] = useState<DictionaryEntry[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -21,7 +27,8 @@ export const DictionarySettings: React.FC = () => {
   const [isCaseSensitive, setIsCaseSensitive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [keyterms, setKeyterms] = useState<{ count: number; estimatedTokens: number; dropped: number } | null>(null);
+  const [keyterms, setKeyterms] = useState<KeytermSummary | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     loadEntries();
@@ -51,54 +58,44 @@ export const DictionarySettings: React.FC = () => {
     }
   };
 
-  const handleAddEntry = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!newPhrase.trim() || !newReplacement.trim()) {
       setError('Both phrase and replacement are required');
       return;
     }
 
-    try {
-      const result = await window.electronAPI.dictAddEntry({
-        spoken_phrase: newPhrase.trim(),
-        replacement: newReplacement.trim(),
-        is_case_sensitive: isCaseSensitive,
-      });
+    const data = {
+      spoken_phrase: newPhrase.trim(),
+      replacement: newReplacement.trim(),
+      is_case_sensitive: isCaseSensitive,
+    };
 
-      if (result.success) {
-        closeModal();
-        loadEntries();
+    try {
+      if (editingEntry) {
+        await window.electronAPI.dictUpdateEntry(editingEntry.id, data);
       } else {
-        setError(result.error || 'Failed to add entry');
+        const result = await window.electronAPI.dictAddEntry(data);
+        if (!result.success) {
+          setError(result.error || 'Failed to add entry');
+          return;
+        }
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to add entry');
-    }
-  };
-
-  const handleUpdateEntry = async () => {
-    if (!editingEntry) return;
-    if (!newPhrase.trim() || !newReplacement.trim()) {
-      setError('Both phrase and replacement are required');
-      return;
-    }
-
-    try {
-      await window.electronAPI.dictUpdateEntry(editingEntry.id, {
-        spoken_phrase: newPhrase.trim(),
-        replacement: newReplacement.trim(),
-        is_case_sensitive: isCaseSensitive,
-      });
-
       closeModal();
       loadEntries();
     } catch (err: any) {
-      setError(err.message || 'Failed to update entry');
+      setError(err.message || 'Failed to save entry');
     }
   };
 
   const handleDeleteEntry = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this entry?')) return;
-
+    // Two-step delete: first click arms, second click deletes
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      setTimeout(() => setConfirmDeleteId((current) => (current === id ? null : current)), 3000);
+      return;
+    }
+    setConfirmDeleteId(null);
     try {
       await window.electronAPI.dictDeleteEntry(id);
       loadEntries();
@@ -142,241 +139,143 @@ export const DictionarySettings: React.FC = () => {
   };
 
   return (
-    <div className="setting-group">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <label className="setting-label" style={{ marginBottom: 0 }}>Custom Dictionary</label>
-        <button
-          className="btn-primary"
-          style={{ width: 'auto', marginTop: 0, padding: '8px 16px', fontSize: '13px' }}
-          onClick={openAddModal}
-        >
-          + Add Entry
+    <section className="settings-section" aria-labelledby="settings-dictionary">
+      <div className="section-heading-row">
+        <h2 id="settings-dictionary" className="section-heading">Dictionary</h2>
+        <button type="button" className="btn btn-primary btn-sm" onClick={openAddModal}>
+          Add entry
         </button>
       </div>
-      <div className="setting-description" style={{ marginBottom: '16px' }}>
-        Define custom phrase replacements. When you say a phrase, it will be replaced with your custom text.
-        Enabled entries are also sent to Deepgram as keyterms so names and jargon are recognized correctly —
-        to just teach a word, add it with itself as the replacement (e.g. "Kubernetes" → "Kubernetes").
-      </div>
+      <p className="field-help">
+        Replace what you say with your own text. Enabled entries are also sent to Deepgram as keyterms so names and
+        jargon are recognized correctly. To just teach a word, add it with itself as the replacement
+        (e.g. "Kubernetes" → "Kubernetes").
+      </p>
       {keyterms && keyterms.count > 0 && (
-        <div className="setting-description" style={{ marginBottom: '16px', color: keyterms.dropped ? 'var(--accent-warning)' : undefined }}>
+        <p className={`field-help ${keyterms.dropped ? 'field-help--warning' : ''}`}>
           {keyterms.count} keyterm{keyterms.count === 1 ? '' : 's'} sent to Deepgram (~{keyterms.estimatedTokens} of 450 tokens)
           {keyterms.dropped > 0 && ` — ${keyterms.dropped} newer entr${keyterms.dropped === 1 ? 'y' : 'ies'} over the limit still apply as replacements but aren't sent as keyterms`}
-        </div>
+        </p>
       )}
 
       {isLoading ? (
-        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-          Loading...
-        </div>
+        <p className="empty-hint">Loading…</p>
       ) : entries.length === 0 ? (
-        <div style={{
-          padding: '24px',
-          textAlign: 'center',
-          color: 'var(--text-secondary)',
-          background: 'var(--glass-bg-light)',
-          borderRadius: 'var(--radius-md)',
-          border: '1px dashed var(--glass-border-subtle)'
-        }}>
-          <div style={{ marginBottom: '8px' }}>No dictionary entries yet</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Add your first custom replacement to get started
-          </div>
+        <div className="empty-box">
+          <p>No dictionary entries yet</p>
+          <p className="field-help">Add your first replacement to get started.</p>
         </div>
       ) : (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          maxHeight: '280px',
-          overflowY: 'auto',
-          paddingRight: '4px'
-        }}>
+        <ul className="dict-list">
           {entries.map((entry) => (
-            <div
-              key={entry.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px',
-                background: 'var(--glass-bg-light)',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--glass-border-subtle)',
-                opacity: entry.is_enabled ? 1 : 0.5,
-                transition: 'opacity 0.15s ease'
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
-                <div style={{
-                  fontFamily: 'monospace',
-                  fontSize: '13px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '4px'
-                }}>
-                  <span style={{
-                    color: 'var(--text-secondary)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    maxWidth: '120px'
-                  }} title={entry.spoken_phrase}>
-                    "{entry.spoken_phrase}"
-                  </span>
-                  <span style={{ color: 'var(--text-muted)' }}>→</span>
-                  <span style={{
-                    color: 'var(--accent-primary)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    maxWidth: '120px'
-                  }} title={entry.replacement}>
-                    "{entry.replacement}"
-                  </span>
-                </div>
-                {entry.is_case_sensitive ? (
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                    Case-sensitive
-                  </span>
-                ) : null}
+            <li key={entry.id} className={`dict-row ${entry.is_enabled ? '' : 'is-disabled'}`}>
+              <div className="dict-row-main">
+                <span className="dict-phrase" title={entry.spoken_phrase}>{entry.spoken_phrase}</span>
+                <span className="dict-arrow" aria-hidden="true">→</span>
+                <span className="dict-replacement" title={entry.replacement}>{entry.replacement}</span>
+                {entry.is_case_sensitive ? <span className="badge">Aa</span> : null}
               </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+              <div className="dict-row-actions">
                 <Switch.Root
-                  className="switch-root"
+                  className="switch-root switch-root--sm"
                   checked={Boolean(entry.is_enabled)}
                   onCheckedChange={() => handleToggleEnabled(entry.id)}
-                  style={{ width: '36px', height: '20px' }}
+                  aria-label={`${entry.is_enabled ? 'Disable' : 'Enable'} "${entry.spoken_phrase}"`}
                 >
-                  <Switch.Thumb className="switch-thumb" style={{ width: '16px', height: '16px' }} />
+                  <Switch.Thumb className="switch-thumb" />
                 </Switch.Root>
-                <button
-                  className="reset-btn"
-                  onClick={() => openEditModal(entry)}
-                  title="Edit"
-                  style={{ padding: '6px' }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEditModal(entry)}>
+                  Edit
                 </button>
                 <button
-                  className="reset-btn"
+                  type="button"
+                  className={`btn btn-sm ${confirmDeleteId === entry.id ? 'btn-danger' : 'btn-ghost'}`}
                   onClick={() => handleDeleteEntry(entry.id)}
-                  title="Delete"
-                  style={{ padding: '6px', color: 'var(--accent-danger)' }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
+                  {confirmDeleteId === entry.id ? 'Confirm' : 'Delete'}
                 </button>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       {/* Add/Edit Modal */}
       <Dialog.Root open={isAddModalOpen || editingEntry !== null} onOpenChange={(open) => !open && closeModal()}>
         <Dialog.Portal>
           <Dialog.Overlay className="modal-overlay" />
-          <Dialog.Content className="modal-content" style={{ maxWidth: '420px' }}>
-            <div className="modal-header">
-              <Dialog.Title className="modal-title">
-                {editingEntry ? 'Edit Dictionary Entry' : 'Add Dictionary Entry'}
-              </Dialog.Title>
-              <Dialog.Close asChild>
-                <button className="modal-close" type="button">×</button>
-              </Dialog.Close>
-            </div>
+          <Dialog.Content className="modal-content modal-content--narrow">
+            <form onSubmit={handleSubmit}>
+              <div className="modal-header">
+                <Dialog.Title className="modal-title">
+                  {editingEntry ? 'Edit entry' : 'Add entry'}
+                </Dialog.Title>
+                <Dialog.Close asChild>
+                  <button className="modal-close" type="button" aria-label="Close">×</button>
+                </Dialog.Close>
+              </div>
 
-            <div className="modal-body" style={{ padding: '20px' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <label className="setting-label" style={{ fontSize: '13px' }}>Spoken Phrase</label>
-                <input
-                  type="text"
-                  className="setting-input"
-                  placeholder="e.g., Kleene Star"
-                  value={newPhrase}
-                  onChange={(e) => setNewPhrase(e.target.value)}
-                  autoFocus
-                />
-                <div className="setting-description" style={{ marginTop: '4px' }}>
-                  The phrase as you speak it
+              <div className="modal-body">
+                <div className="field">
+                  <label className="field-label" htmlFor="dict-phrase">When I say</label>
+                  <input
+                    id="dict-phrase"
+                    type="text"
+                    className="input"
+                    placeholder="e.g. Kleene star"
+                    value={newPhrase}
+                    onChange={(e) => setNewPhrase(e.target.value)}
+                    autoFocus
+                  />
                 </div>
-              </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label className="setting-label" style={{ fontSize: '13px' }}>Replacement Text</label>
-                <input
-                  type="text"
-                  className="setting-input"
-                  placeholder="e.g., K* or ∗"
-                  value={newReplacement}
-                  onChange={(e) => setNewReplacement(e.target.value)}
-                />
-                <div className="setting-description" style={{ marginTop: '4px' }}>
-                  The text to replace it with (supports Unicode symbols)
+                <div className="field">
+                  <label className="field-label" htmlFor="dict-replacement">Write</label>
+                  <input
+                    id="dict-replacement"
+                    type="text"
+                    className="input"
+                    placeholder="e.g. K* (Unicode symbols are fine)"
+                    value={newReplacement}
+                    onChange={(e) => setNewReplacement(e.target.value)}
+                  />
                 </div>
-              </div>
 
-              <div className="switch-row" style={{ marginBottom: '8px' }}>
-                <label className="switch-label" style={{ fontSize: '13px' }}>Case Sensitive</label>
-                <Switch.Root
-                  className="switch-root"
-                  checked={isCaseSensitive}
-                  onCheckedChange={setIsCaseSensitive}
-                >
-                  <Switch.Thumb className="switch-thumb" />
-                </Switch.Root>
-              </div>
-              <div className="setting-description">
-                When off, "kleene star" will match "Kleene Star"
-              </div>
-
-              {error && (
-                <div className="error-message" style={{ marginTop: '16px' }}>
-                  {error}
-                  <button
-                    onClick={() => setError(null)}
-                    style={{
-                      marginLeft: '8px',
-                      background: 'none',
-                      border: 'none',
-                      color: 'inherit',
-                      cursor: 'pointer'
-                    }}
+                <div className="field field--row">
+                  <div>
+                    <label className="field-label" htmlFor="dict-case">Match case exactly</label>
+                    <p className="field-help">When off, "kleene star" also matches "Kleene Star".</p>
+                  </div>
+                  <Switch.Root
+                    id="dict-case"
+                    className="switch-root"
+                    checked={isCaseSensitive}
+                    onCheckedChange={setIsCaseSensitive}
                   >
-                    ×
-                  </button>
+                    <Switch.Thumb className="switch-thumb" />
+                  </Switch.Root>
                 </div>
-              )}
-            </div>
 
-            <div className="modal-footer" style={{ padding: '16px 20px', gap: '12px' }}>
-              <button
-                className="modal-btn"
-                onClick={closeModal}
-                type="button"
-                style={{ background: 'var(--bg-tertiary)', flex: 1 }}
-              >
-                Cancel
-              </button>
-              <button
-                className="modal-btn modal-btn--primary"
-                onClick={editingEntry ? handleUpdateEntry : handleAddEntry}
-                type="button"
-                style={{ flex: 1 }}
-              >
-                {editingEntry ? 'Save Changes' : 'Add Entry'}
-              </button>
-            </div>
+                {error && (
+                  <div className="alert alert--error" role="alert">
+                    <span>{error}</span>
+                    <button type="button" className="alert-dismiss" onClick={() => setError(null)} aria-label="Dismiss">×</button>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer">
+                <button className="btn btn-ghost" onClick={closeModal} type="button">
+                  Cancel
+                </button>
+                <button className="btn btn-primary" type="submit">
+                  {editingEntry ? 'Save changes' : 'Add entry'}
+                </button>
+              </div>
+            </form>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </div>
+    </section>
   );
 };

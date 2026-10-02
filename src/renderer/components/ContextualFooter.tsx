@@ -1,72 +1,54 @@
 import React from 'react';
-import { TabType } from './TabBar';
+import type { TabType } from './TopBar';
+import { shortcutKeys } from '../format';
 
-interface Shortcut {
-  key: string;
+interface Hint {
+  keys: string[];
   label: string;
 }
 
 interface ContextualFooterProps {
   activeTab: TabType;
-  recordingMode?: 'ready' | 'recording' | 'processing';
+  isRecording: boolean;
+  toggleShortcut: string;
+  holdShortcut: string;
 }
 
-const tabShortcuts: Record<TabType, Shortcut[]> = {
-  recording: [
-    { key: '⌘⇧Space', label: 'Record' },
-    { key: '⌘K', label: 'Command Palette' },
-    { key: '⌘H', label: 'History' }
-  ],
-  history: [
-    { key: '↑↓', label: 'Navigate' },
-    { key: '⏎', label: 'Open' },
-    { key: '⌘A', label: 'Select All' },
-    { key: '⌘E', label: 'Export' }
-  ],
-  settings: [
-    { key: '⌘K', label: 'Command Palette' },
-    { key: '⌘1', label: 'Recording' },
-    { key: '⌘2', label: 'History' }
-  ]
-};
+// Only shortcuts that actually work, using the user's configured keys
+function buildHints({ activeTab, isRecording, toggleShortcut, holdShortcut }: ContextualFooterProps): Hint[] {
+  const hints: Hint[] = [];
 
-const recordingStateShortcuts: Shortcut[] = [
-  { key: 'Space', label: 'Pause' },
-  { key: 'Esc', label: 'Cancel' }
-];
-
-const processingStateShortcuts: Shortcut[] = [
-  { key: 'Please wait', label: '' }
-];
-
-export default function ContextualFooter({ activeTab, recordingMode }: ContextualFooterProps) {
-  let shortcuts: Shortcut[] = [];
-
-  // If recording or processing, show state-specific shortcuts
-  if (recordingMode === 'recording') {
-    shortcuts = recordingStateShortcuts;
-  } else if (recordingMode === 'processing') {
-    shortcuts = processingStateShortcuts;
-  } else {
-    // Otherwise, show tab-specific shortcuts
-    shortcuts = tabShortcuts[activeTab] || [];
+  if (isRecording) {
+    if (toggleShortcut) hints.push({ keys: shortcutKeys(toggleShortcut), label: 'Stop' });
+    if (holdShortcut) hints.push({ keys: shortcutKeys(holdShortcut), label: 'Release to stop' });
+    return hints;
   }
 
-  if (shortcuts.length === 0) {
-    return null;
+  if (activeTab === 'recording') {
+    if (toggleShortcut) hints.push({ keys: shortcutKeys(toggleShortcut), label: 'Start / stop' });
+    if (holdShortcut) hints.push({ keys: shortcutKeys(holdShortcut), label: 'Hold to talk' });
   }
+  if (activeTab === 'history') {
+    hints.push({ keys: ['Ctrl', 'F'], label: 'Search' });
+  }
+  hints.push({ keys: ['Ctrl', '1–3'], label: 'Switch tabs' });
+  return hints;
+}
+
+export default function ContextualFooter(props: ContextualFooterProps) {
+  const hints = buildHints(props);
+  if (hints.length === 0) return null;
 
   return (
-    <div className="contextual-footer">
-      {shortcuts.map((shortcut, index) => (
-        <React.Fragment key={`${shortcut.key}-${index}`}>
-          {index > 0 && <span className="footer-separator">•</span>}
-          <div className="footer-shortcut">
-            <kbd>{shortcut.key}</kbd>
-            {shortcut.label && <span>: {shortcut.label}</span>}
-          </div>
-        </React.Fragment>
+    <footer className="footer">
+      {hints.map((hint) => (
+        <span key={hint.label} className="footer-hint">
+          <span className="kbd-group">
+            {hint.keys.map((key) => <kbd key={key}>{key}</kbd>)}
+          </span>
+          <span>{hint.label}</span>
+        </span>
       ))}
-    </div>
+    </footer>
   );
 }

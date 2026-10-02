@@ -1,10 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './overlay.css';
+import { tailText } from './format';
+
+const BAR_COUNT = 12;
+// Enough for about two lines in the bubble; older words scroll off the front
+const MAX_LIVE_CHARS = 110;
 
 export default function Overlay() {
-    const [waveform, setWaveform] = useState<number[]>(new Array(12).fill(0));
+    const [waveform, setWaveform] = useState<number[]>(new Array(BAR_COUNT).fill(0));
     const [isPaused, setIsPaused] = useState(false);
+    const [liveText, setLiveText] = useState('');
     const isPausedRef = useRef(false);
+    const finalsRef = useRef('');
 
     // Keep ref in sync with state
     useEffect(() => {
@@ -15,17 +22,35 @@ export default function Overlay() {
         // Make body transparent for overlay window
         document.body.style.background = 'transparent';
 
-        // Listen for audio data from main app
-        const unsubscribe = window.electronAPI.onAudioData((data: any) => {
+        // Audio levels from the main app
+        const unsubAudio = window.electronAPI.onAudioData((data: any) => {
             if (data?.waveform && !isPausedRef.current) {
-                // Take only 12 bars for a smaller display
-                const reducedWaveform = data.waveform.slice(0, 12);
-                setWaveform(reducedWaveform);
+                setWaveform(data.waveform.slice(0, BAR_COUNT));
             }
         });
 
+        // Live words from Deepgram: confirmed phrases plus the current interim guess
+        const unsubTranscript = window.electronAPI.onDeepgramTranscript(({ text, isFinal }) => {
+            if (isFinal) {
+                finalsRef.current += (finalsRef.current ? ' ' : '') + text;
+                setLiveText(finalsRef.current);
+            } else {
+                setLiveText(finalsRef.current + (finalsRef.current ? ' ' : '') + text);
+            }
+        });
+
+        // New recording: clear the previous session
+        const unsubReset = window.electronAPI.onOverlayReset(() => {
+            finalsRef.current = '';
+            setLiveText('');
+            setIsPaused(false);
+            setWaveform(new Array(BAR_COUNT).fill(0));
+        });
+
         return () => {
-            unsubscribe();
+            unsubAudio();
+            unsubTranscript();
+            unsubReset();
         };
     }, []);
 
@@ -39,18 +64,19 @@ export default function Overlay() {
     };
 
     const handleStop = () => {
-        console.log('[OVERLAY] Stop clicked');
         window.electronAPI.overlayAction('stop');
     };
 
     const handlePause = () => {
-        console.log('[OVERLAY] Pause clicked, current state:', isPaused);
         setIsPaused(!isPaused);
         window.electronAPI.overlayAction(isPaused ? 'resume' : 'pause');
     };
 
     return (
         <div className="overlay-container">
+            <div className={`overlay-text ${liveText ? 'is-visible' : ''}`} aria-live="polite">
+                {tailText(liveText, MAX_LIVE_CHARS)}
+            </div>
             <div className="overlay-pill">
                 <div className="waveform-capsule">
                     {waveform.map((value, index) => {
@@ -90,6 +116,7 @@ export default function Overlay() {
                         className={`overlay-btn pause-btn ${isPaused ? 'paused' : ''}`}
                         onClick={handlePause}
                         title={isPaused ? 'Resume' : 'Pause'}
+                        aria-label={isPaused ? 'Resume' : 'Pause'}
                     >
                         {isPaused ? (
                             // Play icon
@@ -108,6 +135,7 @@ export default function Overlay() {
                         className="overlay-btn stop-btn"
                         onClick={handleStop}
                         title="Stop Recording"
+                        aria-label="Stop recording"
                     >
                         {/* Stop icon */}
                         <svg viewBox="0 0 24 24" fill="currentColor">

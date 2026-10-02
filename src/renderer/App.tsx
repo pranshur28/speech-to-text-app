@@ -1,18 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import './styles.css';
 import { SearchView } from './SearchView';
-import TabBar, { TabType } from './components/TabBar';
-import PersistentHeader, { RecordingStatus } from './components/PersistentHeader';
+import TopBar, { TabType } from './components/TopBar';
 import ContextualFooter from './components/ContextualFooter';
 import { RecordingTab, Transcription } from './components/RecordingTab';
 import { SettingsTab } from './components/SettingsTab';
 import { useRecorder } from './hooks/useRecorder';
+import type { SttEngine } from '../preload';
 
 const MISSING_KEY_MESSAGE = 'Add your Deepgram API key in Settings to start dictating.';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('recording');
   const [recentTranscriptions, setRecentTranscriptions] = useState<Transcription[]>([]);
+  const [toggleShortcut, setToggleShortcut] = useState('');
+  const [holdShortcut, setHoldShortcut] = useState('');
+  const [engine, setEngine] = useState<SttEngine>('flux');
 
   const [pushToTalk, setPushToTalk] = useState(() => {
     try {
@@ -52,17 +55,32 @@ export default function App() {
       }
     });
 
+    window.electronAPI.getShortcuts().then((shortcuts) => {
+      setToggleShortcut(shortcuts.toggle);
+      setHoldShortcut(shortcuts.hold);
+    });
+    window.electronAPI.getSttEngine().then(setEngine);
+
     loadRecentTranscriptions();
 
     // Ensure overlay is hidden on start
     window.electronAPI.setOverlayVisible(false);
   }, []);
 
-  const getRecordingStatus = (): RecordingStatus => {
-    if (recorder.isRecording) return 'recording';
-    if (recorder.isProcessing) return 'processing';
-    return 'ready';
-  };
+  const handleToggleShortcutChange = useCallback((shortcut: string) => {
+    setToggleShortcut(shortcut);
+    window.electronAPI.setToggleShortcut(shortcut);
+  }, []);
+
+  const handleHoldShortcutChange = useCallback((shortcut: string) => {
+    setHoldShortcut(shortcut);
+    window.electronAPI.setHoldShortcut(shortcut);
+  }, []);
+
+  const handleEngineChange = useCallback((value: SttEngine) => {
+    setEngine(value);
+    window.electronAPI.setSttEngine(value);
+  }, []);
 
   const handleDeepgramKeySaved = () => {
     if (recorder.errorMessage === MISSING_KEY_MESSAGE) {
@@ -71,28 +89,27 @@ export default function App() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-primary)' }}>
-      <PersistentHeader
-        status={getRecordingStatus()}
+    <div className="app">
+      <TopBar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        phase={recorder.phase}
         statusText={recorder.status}
-        onCommandPaletteClick={() => {
-          // TODO: Implement command palette in Phase 3
-          console.log('Command palette not yet implemented');
-        }}
-        onSettingsClick={() => setActiveTab('settings')}
+        hasError={!!recorder.errorMessage}
+        engine={engine}
       />
 
-      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
-
-      <div className="tab-content-container">
-        <div className={`tab-content ${activeTab === 'recording' ? 'active' : ''}`}>
+      <main className="tab-panels">
+        <div className={`tab-panel ${activeTab === 'recording' ? 'is-active' : ''}`}>
           <RecordingTab
             isRecording={recorder.isRecording}
+            isPaused={recorder.isPaused}
             isProcessing={recorder.isProcessing}
-            status={recorder.status}
             errorMessage={recorder.errorMessage}
             liveTranscript={recorder.liveTranscript}
             pushToTalk={pushToTalk}
+            toggleShortcut={toggleShortcut}
+            holdShortcut={holdShortcut}
             recentTranscriptions={recentTranscriptions}
             onStart={recorder.startRecording}
             onStop={recorder.stopRecording}
@@ -101,22 +118,30 @@ export default function App() {
           />
         </div>
 
-        <div className={`tab-content ${activeTab === 'history' ? 'active' : ''}`}>
-          <SearchView onClose={() => setActiveTab('recording')} />
+        <div className={`tab-panel ${activeTab === 'history' ? 'is-active' : ''}`}>
+          <SearchView isActive={activeTab === 'history'} />
         </div>
 
-        <div className={`tab-content ${activeTab === 'settings' ? 'active' : ''}`}>
+        <div className={`tab-panel ${activeTab === 'settings' ? 'is-active' : ''}`}>
           <SettingsTab
+            engine={engine}
+            onEngineChange={handleEngineChange}
+            toggleShortcut={toggleShortcut}
+            holdShortcut={holdShortcut}
+            onToggleShortcutChange={handleToggleShortcutChange}
+            onHoldShortcutChange={handleHoldShortcutChange}
             pushToTalk={pushToTalk}
             onPushToTalkChange={setPushToTalk}
             onDeepgramKeySaved={handleDeepgramKeySaved}
           />
         </div>
-      </div>
+      </main>
 
       <ContextualFooter
         activeTab={activeTab}
-        recordingMode={recorder.isRecording ? 'recording' : (recorder.isProcessing ? 'processing' : 'ready')}
+        isRecording={recorder.isRecording}
+        toggleShortcut={toggleShortcut}
+        holdShortcut={holdShortcut}
       />
     </div>
   );

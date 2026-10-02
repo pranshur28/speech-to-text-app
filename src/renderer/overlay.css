@@ -1,9 +1,43 @@
 .overlay-container {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: flex-end;
     align-items: center;
+    gap: 8px;
     height: 100vh;
     width: 100vw;
+    padding-bottom: 8px;
+    box-sizing: border-box;
+    font-family: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Live transcript bubble above the pill — newest words on the right */
+.overlay-text {
+    max-width: calc(100vw - 24px);
+    padding: 7px 14px;
+    background: rgba(14, 14, 18, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    pointer-events: none;
+}
+
+.overlay-text.is-visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* Chromeless container - no background, just layout */

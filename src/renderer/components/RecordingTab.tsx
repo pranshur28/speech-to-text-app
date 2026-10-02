@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { formatElapsed, shortcutKeys } from '../format';
 
 export interface Transcription {
   id: number;
@@ -12,11 +13,13 @@ export interface Transcription {
 
 interface RecordingTabProps {
   isRecording: boolean;
+  isPaused: boolean;
   isProcessing: boolean;
-  status: string;
   errorMessage: string | null;
   liveTranscript: string;
   pushToTalk: boolean;
+  toggleShortcut: string;
+  holdShortcut: string;
   recentTranscriptions: Transcription[];
   onStart: () => void;
   onStop: () => void;
@@ -24,19 +27,96 @@ interface RecordingTabProps {
   onDismissError: () => void;
 }
 
+// Recording time, excluding time spent paused
+function useElapsed(active: boolean, paused: boolean): number {
+  const [elapsed, setElapsed] = useState(0);
+  const lastTickRef = useRef(0);
+
+  useEffect(() => {
+    if (!active) return;
+    setElapsed(0);
+    lastTickRef.current = Date.now();
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
+    lastTickRef.current = Date.now();
+    if (paused) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setElapsed((value) => value + (now - lastTickRef.current));
+      lastTickRef.current = now;
+    }, 250);
+    return () => clearInterval(interval);
+  }, [active, paused]);
+
+  return elapsed;
+}
+
+const KeyChips: React.FC<{ shortcut: string }> = ({ shortcut }) => (
+  <span className="kbd-group">
+    {shortcutKeys(shortcut).map((key) => <kbd key={key}>{key}</kbd>)}
+  </span>
+);
+
+const RecentItem: React.FC<{ item: Transcription }> = ({ item }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(item.formatted_text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  return (
+    <li className={`recent-item ${expanded ? 'recent-item--expanded' : ''}`}>
+      <div className="recent-item-header">
+        <time className="recent-item-time">{new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
+        <button
+          type="button"
+          className={`icon-text-btn ${copied ? 'icon-text-btn--success' : ''}`}
+          onClick={handleCopy}
+          aria-label="Copy transcription"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <button
+        type="button"
+        className="recent-item-text"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        title={expanded ? 'Show less' : 'Show all'}
+      >
+        {item.formatted_text}
+      </button>
+    </li>
+  );
+};
+
 export const RecordingTab: React.FC<RecordingTabProps> = ({
   isRecording,
+  isPaused,
   isProcessing,
-  status,
   errorMessage,
   liveTranscript,
   pushToTalk,
+  toggleShortcut,
+  holdShortcut,
   recentTranscriptions,
   onStart,
   onStop,
   onCancel,
   onDismissError,
 }) => {
+  const elapsed = useElapsed(isRecording, isPaused);
+
   const handleMouseDown = () => {
     if (isProcessing) return;
     if (pushToTalk) onStart();
@@ -55,76 +135,78 @@ export const RecordingTab: React.FC<RecordingTabProps> = ({
     }
   };
 
+  const buttonLabel = pushToTalk
+    ? 'Hold to record'
+    : isRecording ? 'Stop recording' : 'Start recording';
+
   return (
-    <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '40px', padding: '24px' }}>
-      <div className="recording-section">
-        <div className="record-button-container">
-          <div className={`ripple ${isRecording ? 'active' : ''}`}></div>
-          <div
-            className={`record-button ${isRecording ? 'recording' : ''}`}
+    <div className="recording-tab">
+      <section className="recorder" aria-label="Recorder">
+        <div className={`record-button-wrap ${isRecording && !isPaused ? 'is-live' : ''}`}>
+          <span className="record-ring" aria-hidden="true" />
+          <button
+            type="button"
+            className={`record-button ${isRecording ? 'record-button--recording' : ''} ${isProcessing ? 'record-button--busy' : ''}`}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             onClick={handleClick}
-            title={pushToTalk ? "Hold to Record" : "Click to Toggle"}
+            disabled={isProcessing}
+            aria-label={buttonLabel}
+            title={buttonLabel}
           >
-            <div className="mic-icon"></div>
-          </div>
+            {isRecording && !pushToTalk ? (
+              <span className="stop-icon" aria-hidden="true" />
+            ) : (
+              <span className="mic-icon" aria-hidden="true" />
+            )}
+          </button>
         </div>
-        <div className={`status-badge ${isRecording || isProcessing ? 'active' : ''}`}>
-          {status}
+
+        <div className="recorder-caption">
+          {isRecording ? (
+            <span className="recorder-timer">{isPaused ? 'Paused · ' : ''}{formatElapsed(elapsed)}</span>
+          ) : isProcessing ? (
+            <span className="recorder-hint">Finishing up…</span>
+          ) : toggleShortcut ? (
+            <span className="recorder-hint">Press <KeyChips shortcut={toggleShortcut} /> anywhere to dictate</span>
+          ) : holdShortcut ? (
+            <span className="recorder-hint">Hold <KeyChips shortcut={holdShortcut} /> anywhere to dictate</span>
+          ) : (
+            <span className="recorder-hint">{pushToTalk ? 'Hold the button to dictate' : 'Click the button to dictate'}</span>
+          )}
         </div>
-        {isRecording && liveTranscript && (
-          <div style={{
-            maxWidth: '90%',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            background: 'var(--bg-secondary, rgba(255,255,255,0.05))',
-            color: 'var(--text-secondary, #aaa)',
-            fontSize: '14px',
-            lineHeight: 1.5,
-            textAlign: 'center',
-            maxHeight: '120px',
-            overflowY: 'auto',
-            wordBreak: 'break-word',
-          }}>
-            {liveTranscript}
+
+        {isRecording && (
+          <div className="live-transcript" aria-live="polite">
+            {liveTranscript || <span className="live-transcript-placeholder">Listening…</span>}
           </div>
         )}
+
         {isRecording && !pushToTalk && (
-          <button className="cancel-btn" onClick={onCancel}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
             Cancel
           </button>
         )}
+
         {errorMessage && (
-          <div className="error-message">
-            {errorMessage}
-            <button className="error-dismiss" onClick={onDismissError}>×</button>
+          <div className="alert alert--error" role="alert">
+            <span>{errorMessage}</span>
+            <button type="button" className="alert-dismiss" onClick={onDismissError} aria-label="Dismiss">×</button>
           </div>
         )}
-      </div>
+      </section>
 
-      <div className="recent-section">
-        <div className="section-header">
-          <span className="section-title">Recent History</span>
-        </div>
-        <div className="recent-list">
-          {recentTranscriptions.length === 0 ? (
-            <div className="empty-state">
-              {pushToTalk ? "Hold button to speak" : "Click button to start"}
-            </div>
-          ) : (
-            recentTranscriptions.map(item => (
-              <div key={item.id} className="recent-item">
-                <div className="recent-meta">
-                  <span>{new Date(item.timestamp).toLocaleTimeString()}</span>
-                </div>
-                {item.formatted_text}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </main>
+      <section className="recent" aria-label="Recent transcriptions">
+        <h2 className="section-heading">Recent</h2>
+        {recentTranscriptions.length === 0 ? (
+          <p className="empty-hint">Your dictations will appear here.</p>
+        ) : (
+          <ul className="recent-list">
+            {recentTranscriptions.map((item) => <RecentItem key={item.id} item={item} />)}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 };

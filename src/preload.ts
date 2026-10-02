@@ -16,6 +16,7 @@ export interface IElectronAPI {
   onAudioData: (callback: (data: any) => void) => () => void;
   overlayAction: (action: 'stop' | 'pause' | 'resume') => void;
   setOverlayInteractive: (interactive: boolean) => void;
+  onOverlayReset: (callback: () => void) => () => void;
   // Database API
   dbSaveTranscription: (data: any) => Promise<{ success: boolean; id: number }>;
   dbGetTranscription: (id: number) => Promise<{ success: boolean; transcription: any }>;
@@ -83,6 +84,11 @@ const electronAPI: IElectronAPI = {
   },
   overlayAction: (action: 'stop' | 'pause' | 'resume') => ipcRenderer.send('overlay-action', action),
   setOverlayInteractive: (interactive: boolean) => ipcRenderer.send('set-overlay-interactive', interactive),
+  onOverlayReset: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('overlay:reset', handler);
+    return () => ipcRenderer.removeListener('overlay:reset', handler);
+  },
   // Database API
   dbSaveTranscription: (data: any) => ipcRenderer.invoke('db:save-transcription', data),
   dbGetTranscription: (id: number) => ipcRenderer.invoke('db:get-transcription', id),

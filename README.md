@@ -298,9 +298,8 @@ speech-to-text-app/
 │   │       ├── NoteDetailModal.tsx      # Full note view modal
 │   │       ├── FilterPanel.tsx          # Date/favorite/tag filters
 │   │       ├── DictionarySettings.tsx   # Custom phrase replacement UI
-│   │       ├── PersistentHeader.tsx     # Recording status header
-│   │       ├── TabBar.tsx               # Tab navigation
-│   │       ├── ContextualFooter.tsx     # Action buttons
+│   │       ├── TopBar.tsx               # Status + tab navigation
+│   │       ├── ContextualFooter.tsx     # Working keyboard shortcut hints
 │   │       └── ErrorBoundary.tsx        # React error boundary
 │   ├── services/                        # Business logic
 │   │   ├── deepgram.ts                  # Deepgram WebSocket streaming

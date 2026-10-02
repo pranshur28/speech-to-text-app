@@ -92,6 +92,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}
           aria-label="Search transcriptions"
+          aria-keyshortcuts="Control+F"
         />
         {query && (
           <button
@@ -117,9 +118,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             </svg>
           </button>
         )}
-      </div>
-      <div className="search-bar-hint">
-        Press <kbd>⌘F</kbd> to focus
       </div>
     </div>
   );

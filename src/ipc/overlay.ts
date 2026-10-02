@@ -8,6 +8,9 @@ export function registerOverlayHandlers(ctx: ServiceContext) {
       const overlayWindow = ctx.getOverlayWindow();
       if (!overlayWindow || overlayWindow.isDestroyed()) {
         ctx.createOverlayWindow();
+      } else {
+        // Clear the previous session's text and pause state before showing
+        overlayWindow.webContents.send('overlay:reset');
       }
       ctx.getOverlayWindow()?.showInactive();
     } else {
