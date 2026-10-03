@@ -107,7 +107,8 @@ export function useRecorder({ onSaved }: UseRecorderOptions) {
         waveform.push(frequencyData[freqIndex] / 255);
       }
 
-      window.electronAPI.sendAudioData({ volume, waveform });
+      // rms is unclipped so the overlay can tell loud from very loud
+      window.electronAPI.sendAudioData({ volume, rms, waveform });
     };
 
     audioDataIntervalRef.current = setInterval(sendAudioData, 16);

@@ -24,6 +24,7 @@ export interface IElectronAPI {
   onAudioData: (callback: (data: any) => void) => () => void;
   overlayAction: (action: 'stop' | 'pause' | 'resume') => void;
   setOverlayInteractive: (interactive: boolean) => void;
+  onOverlayPointerLeft: (callback: () => void) => () => void;
   onOverlayState: (callback: (state: OverlayState) => void) => () => void;
   overlayReady: () => void;
   // Database API
@@ -98,6 +99,10 @@ const electronAPI: IElectronAPI = {
   },
   overlayAction: (action: 'stop' | 'pause' | 'resume') => ipcRenderer.send('overlay-action', action),
   setOverlayInteractive: (interactive: boolean) => ipcRenderer.send('set-overlay-interactive', interactive),
+  onOverlayPointerLeft: (callback: () => void) => {
+    ipcRenderer.on('overlay:pointer-left', callback);
+    return () => ipcRenderer.removeListener('overlay:pointer-left', callback);
+  },
   onOverlayState: (callback: (state: OverlayState) => void) => {
     const handler = (_event: any, state: OverlayState) => callback(state);
     ipcRenderer.on('overlay:state', handler);

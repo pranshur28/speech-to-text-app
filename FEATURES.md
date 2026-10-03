@@ -73,8 +73,9 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Status**: Implemented & Tested
 
 - **Audio visualization overlay** during recording
-  - Rotating pixel sphere that expands and scatters with voice loudness, and contracts to a glowing dot in silence
-  - Palette-coloured dots with individual glow; orange when paused, fast spin while finishing
+  - Dotted ripples: loose concentric rings of glowing dots that burst outward with voice loudness (inner rings first) and drift back into a dot in silence
+  - Hover the dot to fan out control cards (pause/resume, timer, stop) radiating from it
+  - Orange when paused; rings slowly turn while finishing
   - Bottom-center screen positioning
   - Click-through design (doesn't steal focus, hover to interact)
   - Pause/Resume and Stop buttons

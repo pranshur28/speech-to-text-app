@@ -1,27 +1,30 @@
-/* Recording pill — a black capsule holding a glowing pixel sphere.
-   A transparent window can't blur the desktop behind it, so the surface is opaque. */
+/* Recording indicator — glowing dotted ripples that burst outward with the voice.
+   Hovering the dot fans the controls out above it like a hand of cards. */
 
 .overlay-root {
-    --pill-bg: #08080b;
-    --pill-text: rgba(255, 255, 255, 0.92);
-    --pill-muted: rgba(255, 255, 255, 0.62);
+    --card-bg: #111116;
+    --card-text: rgba(255, 255, 255, 0.92);
     --paused: #ff9f0a;
     --ease: cubic-bezier(0.2, 0, 0, 1);
+    /* Dot footprint; its centre sits 34px above the window bottom (DOT_FROM_BOTTOM in src/ipc/overlay.ts) */
+    --dot: 22px;
+    --dot-bottom: 23px;
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative;
     width: 100vw;
     height: 100vh;
     font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
     user-select: none;
 }
 
-/* ---- Shell ---- */
+/* ---- Shell: the dot, its ripples and the fan, all anchored on the dot ---- */
 
 .pill-shell {
-    position: relative;
-    border-radius: 999px;
+    position: absolute;
+    left: calc(50% - var(--dot) / 2);
+    bottom: var(--dot-bottom);
+    width: var(--dot);
+    height: var(--dot);
 
     /* Enter/exit */
     opacity: 0;
@@ -36,124 +39,114 @@
     transform: none;
 }
 
-.pill {
-    position: relative;
-    display: flex;
-    align-items: center;
-    height: 24px;
-    padding: 0 1px;
-    border-radius: 999px;
-    /* At rest only the dots show; the capsule appears on hover behind the timer and controls */
-    background: transparent;
-    color: var(--pill-text);
-    transition:
-        height 220ms var(--ease),
-        padding 220ms var(--ease),
-        background 180ms var(--ease),
-        box-shadow 180ms var(--ease);
-}
+/* ---- Dotted ripples: drawn on a canvas (see Overlay.tsx) ---- */
 
-/* Keep the sphere centred in the pill's rounded end as it grows */
-.pill-shell.is-expanded .pill {
-    height: 29px;
-    padding: 0 10px 0 3.5px;
-    background: var(--pill-bg);
-    box-shadow:
-        0 6px 18px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.07);
-}
-
-.pill-shell.is-expanded.has-controls .pill {
-    padding-right: 3px;
-}
-
-/* ---- Pixel sphere: drawn on a canvas (see Overlay.tsx) ---- */
-
-.pill-sphere {
+.pill-ripple {
+    position: absolute;
     display: block;
-    flex-shrink: 0;
     pointer-events: none;
 }
 
-/* ---- Hover reveal: timer + controls ---- */
-
-.pill-extra {
-    display: flex;
-    align-items: center;
-    max-width: 0;
-    overflow: hidden;
-    opacity: 0;
-    transition:
-        max-width 240ms var(--ease),
-        opacity 180ms var(--ease);
+/* Covers the open fan so the gap between dot and cards still counts as hovering.
+   Stops at the dot's bottom edge so it never reaches under the taskbar. */
+.pill-hitbox {
+    position: absolute;
+    inset: -56px -50px 0 -50px;
+    pointer-events: none;
 }
 
-.pill-shell.is-expanded .pill-extra {
-    max-width: 112px;
+.pill-shell.is-expanded .pill-hitbox {
+    pointer-events: auto;
+}
+
+/* ---- Fan of cards ---- */
+
+.pill-fan {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.pill-shell.is-expanded .pill-fan {
+    pointer-events: auto;
+}
+
+/* Cards are centred on the dot; Overlay.tsx sets each one's transform to fan it out */
+.fan-card {
+    position: absolute;
+    left: calc(50% - 15px);
+    top: calc(50% - 19px);
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 9px;
+    background: var(--card-bg);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+    color: var(--card-text);
+    transform-origin: 50% 50%;
+
+    opacity: 0;
+    transition:
+        opacity 160ms var(--ease),
+        transform 240ms var(--ease),
+        translate 120ms var(--ease),
+        background 120ms var(--ease);
+}
+
+.pill-shell.is-expanded .fan-card {
     opacity: 1;
 }
 
-.pill-timer {
-    margin-left: 8px;
-    font-size: 10.5px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: rgba(255, 255, 255, 0.88);
-    white-space: nowrap;
+button.fan-card {
+    cursor: pointer;
 }
 
-.pill--paused .pill-timer {
-    color: var(--paused);
-}
-
-.pill-divider {
-    width: 1px;
-    height: 11px;
-    margin: 0 4px 0 8px;
-    background: rgba(255, 255, 255, 0.14);
-    flex-shrink: 0;
-}
-
-.pill-btn {
+.fan-card-label {
     display: grid;
     place-items: center;
-    width: 22px;
-    height: 22px;
-    margin-left: 2px;
-    padding: 0;
-    border: none;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.12);
-    color: #ffffff;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: background 120ms var(--ease), transform 120ms var(--ease);
 }
 
-.pill-btn svg {
-    width: 8px;
-    height: 8px;
+.fan-card svg {
+    width: 10px;
+    height: 10px;
     fill: currentColor;
 }
 
-.pill-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+button.fan-card:hover {
+    translate: 0 -3px;
+    background: #1d1d25;
 }
 
-.pill-btn:active {
-    transform: scale(0.94);
+button.fan-card:active {
+    translate: 0 -1px;
 }
 
-.pill-btn--stop {
+.fan-card--stop {
+    border-color: transparent;
     background: #ffffff;
     color: #08080b;
 }
 
-.pill-btn--stop:hover {
+button.fan-card--stop:hover {
     background: rgba(255, 255, 255, 0.86);
 }
 
-.pill-btn:focus-visible {
+.fan-card--timer {
+    font-size: 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
+}
+
+.pill--paused .fan-card--timer {
+    color: var(--paused);
+}
+
+.fan-card:focus-visible {
     outline: 2px solid rgba(255, 255, 255, 0.6);
     outline-offset: 1px;
 }
@@ -161,13 +154,9 @@
 /* ---- Motion ---- */
 
 @media (prefers-reduced-motion: reduce) {
-    .pill-shell {
-        animation: none !important;
-    }
-
     .pill-shell,
-    .pill,
-    .pill-extra {
-        transition-duration: 0.01ms;
+    .fan-card {
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
     }
 }
