@@ -17,7 +17,7 @@ A powerful, polished note-taking companion that transforms speech into searchabl
   - Toggle mode: Click button to start/stop
   - Push-to-Talk: Hold shortcut while speaking (with paste mode to prevent key state corruption)
   - Pause/resume during recording
-  - Recording pill: status dot + live level bars; hover to reveal the timer and pause/stop (hidden in hold-to-talk). Shows Connecting / Paused / Finishing states and appears on the monitor your mouse is on
+  - Recording pill: a glowing pixel sphere that swells with your voice; hover to reveal the timer and pause/stop (hidden in hold-to-talk). Shows Connecting / Paused / Finishing states and appears on the monitor your mouse is on
 
 - **🤖 Deepgram Streaming Transcription** (choose in Settings)
   - **Flux** (default): Model-integrated end-of-turn detection, so text is pasted in whole sentences
@@ -57,10 +57,9 @@ A powerful, polished note-taking companion that transforms speech into searchabl
   - Cross-platform paste support with serialized paste queue
 
 - **🎨 Visual Feedback**
-  - Real-time audio waveform visualization (12-bar display)
+  - Pixel-sphere voice visualizer: scatters as you speak louder, collapses to a glowing dot in silence
   - Always-on-top, click-through pill that never takes focus from the app you are dictating into
   - Status indicators (Ready, Starting, Recording, Paused, Processing)
-  - Color-coded waveform bars (green → yellow → red by intensity)
   - Dark theme with modern UI using Radix UI components
 
 ### 📋 Planned Features
@@ -290,7 +289,7 @@ speech-to-text-app/
 │   ├── preload.ts                       # Secure IPC bridge
 │   ├── renderer/                        # React UI
 │   │   ├── App.tsx                      # Main component with tab navigation
-│   │   ├── Overlay.tsx                  # Floating waveform overlay
+│   │   ├── Overlay.tsx                  # Floating recording pill (pixel sphere)
 │   │   ├── styles.css                   # Main styling
 │   │   ├── overlay.css                  # Overlay styling
 │   │   └── components/

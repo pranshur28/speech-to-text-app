@@ -73,8 +73,8 @@ A powerful, polished note-taking companion that transforms speech into searchabl
 **Status**: Implemented & Tested
 
 - **Audio visualization overlay** during recording
-  - 12 animated bars responding to audio volume
-  - Color-coded intensity (green → yellow → red)
+  - Rotating pixel sphere that expands and scatters with voice loudness, and contracts to a glowing dot in silence
+  - Palette-coloured dots with individual glow; orange when paused, fast spin while finishing
   - Bottom-center screen positioning
   - Click-through design (doesn't steal focus, hover to interact)
   - Pause/Resume and Stop buttons

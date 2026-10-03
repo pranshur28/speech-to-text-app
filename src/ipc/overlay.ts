@@ -3,7 +3,7 @@ import log from '../utils/logger';
 import { ServiceContext } from './types';
 import type { OverlayState } from '../preload';
 
-// Room for the fully expanded pill (~275px) plus its halo and shadow on every side
+// Room for the fully expanded pill (~180px) plus its halo and shadow on every side
 export const OVERLAY_WIDTH = 330;
 export const OVERLAY_HEIGHT = 90;
 // Matches the pill's exit animation in overlay.css, so it can finish before the window hides

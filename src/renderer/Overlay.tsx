@@ -3,14 +3,41 @@ import './overlay.css';
 import { formatElapsed } from './format';
 import type { OverlayPhase, OverlayState } from '../preload';
 
-// Odd count so there's a center bar; low (voice) frequencies sit in the middle, mirrored outward
-const BAR_COUNT = 13;
-const CENTER = (BAR_COUNT - 1) / 2;
-const MIN_SCALE = 0.14;
+// Sphere canvas size in CSS pixels; larger than the pill so scattered dots and their glow are never clipped
+const SPHERE_SIZE = 44;
+// How much of the canvas the pill's layout reserves (the rest overflows invisibly)
+const SPHERE_FOOTPRINT = 22;
+// Sphere radius when silent (a tight ball) and at full voice
+const RADIUS_MIN = 1;
+const RADIUS_MAX = 10;
+const PIXEL_COUNT = 90;
 
-// Smoothing: rise quickly with the voice, fall slowly so bars don't flicker
-const ATTACK = 0.45;
-const RELEASE = 0.12;
+// Smoothing: swell quickly with the voice, contract slowly back into a ball
+const ATTACK = 0.5;
+const RELEASE = 0.05;
+
+// Palette, pole to pole (matches the ring in overlay.css)
+const PALETTE = ['#5b8cff', '#9f6bff', '#ff5fa8', '#ffa552'];
+const PAUSED_COLOR = '#ff9f0a';
+// Soft glow around each dot, in CSS pixels
+const DOT_GLOW = 3;
+
+/** Pixels spread evenly over a unit sphere (Fibonacci lattice), each with a little looseness for scattering. */
+function makePixels() {
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  return Array.from({ length: PIXEL_COUNT }, (_, i) => {
+    const y = 1 - (2 * (i + 0.5)) / PIXEL_COUNT;
+    const ring = Math.sqrt(1 - y * y);
+    const theta = golden * i;
+    return {
+      x: Math.cos(theta) * ring,
+      y,
+      z: Math.sin(theta) * ring,
+      looseness: 0.7 + Math.random() * 0.6,
+      color: PALETTE[Math.min(PALETTE.length - 1, Math.floor(((y + 1) / 2) * PALETTE.length))],
+    };
+  });
+}
 
 const PHASE_LABELS: Record<OverlayPhase, string> = {
   hidden: '',
@@ -26,13 +53,8 @@ export default function Overlay() {
   const [elapsed, setElapsed] = useState(0);
 
   const phaseRef = useRef<OverlayPhase>('hidden');
-  const targets = useRef(new Float32Array(BAR_COUNT));
-  const levels = useRef(new Float32Array(BAR_COUNT));
-  const barRefs = useRef<Array<HTMLSpanElement | null>>([]);
-  // Overall voice level drives the halo's (subtle) brightness via a CSS variable
-  const targetVolume = useRef(0);
-  const volume = useRef(0);
-  const shellRef = useRef<HTMLDivElement>(null);
+  const loudness = useRef(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     phaseRef.current = state.phase;
@@ -51,15 +73,9 @@ export default function Overlay() {
     });
 
     const unsubAudio = window.electronAPI.onAudioData((data: any) => {
-      targetVolume.current = Math.min(1, Number(data?.volume) || 0);
-      const waveform: number[] | undefined = data?.waveform;
-      if (!waveform) return;
-      for (let i = 0; i < BAR_COUNT; i++) {
-        // Skip bin 0 (DC); spread the next bands from the center outward
-        const band = Math.min(waveform.length - 1, Math.round(Math.abs(i - CENTER)) + 1);
-        const value = waveform[band] || 0;
-        targets.current[i] = Math.min(1, Math.pow(value, 1.3) * 1.25);
-      }
+      const volume = Math.min(1, Number(data?.volume) || 0);
+      // Curve lifts normal speech so the sphere reacts without shouting
+      loudness.current = Math.min(1, Math.pow(volume * 2.5, 0.7));
     });
 
     // Ask for the current state in case it was sent before this page loaded
@@ -83,41 +99,80 @@ export default function Overlay() {
     return () => clearInterval(interval);
   }, [state.phase]);
 
-  // Bar animation, written straight to the DOM each frame (no React re-render per frame)
+  // Pixel sphere, drawn straight to the canvas each frame (no React re-render per frame)
   useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(SPHERE_SIZE * dpr);
+    canvas.height = Math.round(SPHERE_SIZE * dpr);
+    ctx.scale(dpr, dpr);
+
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const pixels = makePixels();
+    const center = SPHERE_SIZE / 2;
+    // Tilt the spin axis so the rotation reads as 3D
+    const tiltCos = Math.cos(0.45);
+    const tiltSin = Math.sin(0.45);
+    let level = 0;
+    let spin = 0;
     let frame = 0;
-    const start = performance.now();
+    let last = performance.now();
+    const start = last;
 
     const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
       const t = (now - start) / 1000;
       const phase = phaseRef.current;
 
-      for (let i = 0; i < BAR_COUNT; i++) {
-        let target = targets.current[i];
-        if (phase === 'connecting') {
-          // A soft wave travelling across the bars while we connect
-          target = reduceMotion ? 0.2 : 0.18 + 0.22 * Math.max(0, Math.sin(t * 6 - i * 0.55));
-        } else if (phase !== 'listening') {
-          target = 0;
-        } else if (target < 0.05 && !reduceMotion) {
-          // Silence: a gentle breathing motion so the pill reads as "alive"
-          target = 0.05 + 0.035 * (1 + Math.sin(t * 2.4 - Math.abs(i - CENTER) * 0.6));
-        }
-
-        const current = levels.current[i];
-        const next = current + (target - current) * (target > current ? ATTACK : RELEASE);
-        levels.current[i] = next;
-
-        const bar = barRefs.current[i];
-        if (bar) {
-          const scale = MIN_SCALE + (1 - MIN_SCALE) * Math.min(1, next);
-          bar.style.transform = `scaleY(${scale.toFixed(3)})`;
-        }
+      let target = 0;
+      let spinSpeed = 0.6;
+      let alpha = 1;
+      if (phase === 'listening') {
+        target = loudness.current;
+      } else if (phase === 'connecting') {
+        // A gentle pulse while we connect
+        target = reduceMotion ? 0.15 : 0.1 + 0.12 * (1 + Math.sin(t * 4));
+      } else if (phase === 'paused') {
+        target = 0.1;
+        spinSpeed = 0.25;
+      } else if (phase === 'finishing') {
+        spinSpeed = 7;
+        alpha = 0.6;
       }
-      const volumeTarget = phase === 'listening' ? targetVolume.current : 0;
-      volume.current += (volumeTarget - volume.current) * (volumeTarget > volume.current ? 0.25 : 0.06);
-      shellRef.current?.style.setProperty('--level', volume.current.toFixed(3));
+      level += (target - level) * (target > level ? ATTACK : RELEASE);
+      if (!reduceMotion) spin += dt * (spinSpeed + level * 3);
+
+      const radius = RADIUS_MIN + (RADIUS_MAX - RADIUS_MIN) * level;
+      const cosY = Math.cos(spin);
+      const sinY = Math.sin(spin);
+
+      ctx.clearRect(0, 0, SPHERE_SIZE, SPHERE_SIZE);
+      ctx.globalCompositeOperation = 'lighter';
+
+      ctx.shadowBlur = DOT_GLOW * dpr;
+
+      for (const p of pixels) {
+        // Louder voice pulls each pixel off the surface by its own amount, scattering the sphere
+        const r = radius * (1 + (p.looseness - 1) * level);
+        // Spin around Y, then tilt around X
+        const x1 = p.x * cosY + p.z * sinY;
+        const z1 = -p.x * sinY + p.z * cosY;
+        const y2 = p.y * tiltCos - z1 * tiltSin;
+        const z2 = p.y * tiltSin + z1 * tiltCos;
+
+        // Nearer pixels are bigger and brighter
+        const depth = (z2 + 1) / 2;
+        const size = 0.9 + depth * 0.7;
+        ctx.globalAlpha = alpha * (0.25 + depth * 0.75);
+        const color = phase === 'paused' ? PAUSED_COLOR : p.color;
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.fillRect(center + x1 * r - size / 2, center + y2 * r - size / 2, size, size);
+      }
 
       frame = requestAnimationFrame(tick);
     };
@@ -144,7 +199,6 @@ export default function Overlay() {
   return (
     <div className="overlay-root">
       <div
-        ref={shellRef}
         className={[
           'pill-shell',
           `pill--${phase}`,
@@ -157,23 +211,17 @@ export default function Overlay() {
         role="status"
         aria-label={`${PHASE_LABELS[phase]}, ${timeText}`}
       >
-        <span className="pill-halo" aria-hidden="true" />
-        <span className="pill-ring" aria-hidden="true" />
         <div className="pill">
-          <span className="pill-indicator" aria-hidden="true">
-            {phase === 'finishing' ? <span className="pill-spinner" /> : <span className="pill-dot" />}
-          </span>
-
-          <span className="pill-bars" aria-hidden="true">
-            {Array.from({ length: BAR_COUNT }, (_, i) => (
-              <span
-                key={i}
-                className="pill-bar"
-                data-tier={Math.min(3, Math.floor(Math.abs(i - CENTER) / 2))}
-                ref={(el) => { barRefs.current[i] = el; }}
-              />
-            ))}
-          </span>
+          <canvas
+            ref={canvasRef}
+            className="pill-sphere"
+            style={{
+              width: SPHERE_SIZE,
+              height: SPHERE_SIZE,
+              margin: (SPHERE_FOOTPRINT - SPHERE_SIZE) / 2,
+            }}
+            aria-hidden="true"
+          />
 
           <span className="pill-extra">
             <span className="pill-timer">{phase === 'connecting' ? 'Connecting' : timeText}</span>
