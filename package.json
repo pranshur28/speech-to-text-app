@@ -1,6 +1,6 @@
 {
   "name": "speech-to-text-app",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Desktop app for speech-to-text with LLM formatting",
   "main": "dist/main.js",
   "homepage": "./",
