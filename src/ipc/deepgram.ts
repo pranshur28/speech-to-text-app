@@ -1,12 +1,14 @@
 import { ipcMain, IpcMainEvent, IpcMainInvokeEvent } from 'electron';
 import { DeepgramStreamingService } from '../services/deepgram';
 import { SttEngine } from '../services/config';
-import { LiveTyper } from '../services/live-typer';
+import { HeldModifiers, LiveTyper } from '../services/live-typer';
 import { isEnterCommand, joinWithCommands } from '../services/voice-commands';
 import log from '../utils/logger';
 import { ServiceContext } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const NO_MODIFIERS: HeldModifiers = { ctrlHeld: false, shiftHeld: false, altHeld: false, metaHeld: false };
 
 export function registerDeepgramHandlers(ctx: ServiceContext) {
   // Serialized paste queue — prevents overlapping clipboard operations
@@ -24,17 +26,22 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
     }
   };
 
+  // Run our synthetic input with hotkey tracking ignoring it. `fn` gets the modifiers
+  // physically held; during hold-to-talk they are lifted first, so it sees none.
+  const runInput = async <T>(fn: (held: HeldModifiers) => Promise<T>): Promise<T> => {
+    const shortcutMgr = ctx.getShortcutManager();
+    const held = shortcutMgr.enterPasteMode();
+    const lifted = shortcutMgr.liftHeldModifiers();
+    try {
+      return await fn(lifted ? NO_MODIFIERS : held);
+    } finally {
+      lifted?.restore();
+      shortcutMgr.exitPasteMode();
+    }
+  };
+
   const createLiveTyper = () => new LiveTyper({
-    // Hotkey tracking ignores our own keystrokes while input runs
-    runInput: async (fn) => {
-      const shortcutMgr = ctx.getShortcutManager();
-      const held = shortcutMgr.enterPasteMode();
-      try {
-        return await fn(held);
-      } finally {
-        shortcutMgr.exitPasteMode();
-      }
-    },
+    runInput,
     typeText: (text) => ctx.getPasteService()!.typeText(text),
     pasteText: (text) => ctx.getPasteService()!.paste(text),
     pressBackspace: (count) => ctx.getPasteService()!.pressBackspace(count),
@@ -55,32 +62,23 @@ export function registerDeepgramHandlers(ctx: ServiceContext) {
       const command = enterPhrase && isEnterCommand(phrase, enterPhrase) ? 'enter' : null;
       const text = command ? '' : phrase;
       const replaced = ctx.getDictionaryService()?.applyReplacements(text) ?? text;
-      const shortcutMgr = ctx.getShortcutManager();
 
       try {
         if (replaced) {
-          // Enter paste mode: ignore our synthetic keys and get currently held modifiers
-          // so paste doesn't corrupt key state or release the user's physical modifier keys
-          const heldModifiers = shortcutMgr.enterPasteMode();
-          try {
-            await pasteService.paste((pasteNeedsSeparator ? ' ' : '') + replaced, heldModifiers);
-          } finally {
-            shortcutMgr.exitPasteMode();
-          }
+          // Held modifiers are passed on so paste doesn't release the user's physical keys
+          await runInput((held) => pasteService.paste((pasteNeedsSeparator ? ' ' : '') + replaced, held));
           pasteNeedsSeparator = true;
         }
 
         if (command === 'enter') {
           // Never press Enter while a modifier is held (it would become Ctrl+Enter etc.)
           for (;;) {
-            const held = shortcutMgr.enterPasteMode();
-            const anyHeld = held.ctrlHeld || held.shiftHeld || held.altHeld || held.metaHeld;
-            try {
-              if (!anyHeld) await pasteService.pressEnter();
-            } finally {
-              shortcutMgr.exitPasteMode();
-            }
-            if (!anyHeld) break;
+            const pressed = await runInput(async (held) => {
+              if (held.ctrlHeld || held.shiftHeld || held.altHeld || held.metaHeld) return false;
+              await pasteService.pressEnter();
+              return true;
+            });
+            if (pressed) break;
             await sleep(40);
           }
           pasteNeedsSeparator = false;

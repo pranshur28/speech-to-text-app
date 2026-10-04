@@ -1,6 +1,7 @@
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { BrowserWindow } from 'electron';
 import log from '../utils/logger';
+import { HoldKeyGuard, LiftedModifiers } from './hold-key-guard';
 
 // Keys our own simulated input can produce: typing (letters, digits, punctuation, Space,
 // Shift), corrections (Backspace), the "press enter" voice command and clipboard paste (Ctrl+V).
@@ -39,8 +40,28 @@ export class ShortcutManager {
   // Other keys (F-keys, CapsLock, …) are still tracked, so a hold-to-talk release isn't missed.
   private inPasteMode = false;
 
+  // Windows: lets hold-to-talk type while the hotkey is still held, and reports its real release
+  private holdGuard = new HoldKeyGuard(() => this.releaseHold());
+
   constructor(getMainWindow: () => BrowserWindow | null) {
     this.getMainWindow = getMainWindow;
+  }
+
+  /**
+   * During hold-to-talk, release the held modifiers so our input isn't read as shortcuts.
+   * Null when nothing was lifted (not holding, or not supported), so held modifiers still apply.
+   */
+  liftHeldModifiers(): LiftedModifiers | null {
+    return this.isHoldPressed ? this.holdGuard.liftModifiers() : null;
+  }
+
+  private releaseHold() {
+    if (!this.isHoldPressed) return;
+    this.isHoldPressed = false;
+    this.holdGuard.deactivate();
+    log.info('Hold shortcut released - stopping recording');
+    const win = this.getMainWindow();
+    if (win) win.webContents.send('stop-recording');
   }
 
   /**
@@ -229,6 +250,7 @@ export class ShortcutManager {
     try {
       uIOhook.stop();
     } catch (e) { }
+    this.holdGuard.start();
 
     const toggleKeys = this.toggleShortcut ? this.parseShortcutToKeyCodes(this.toggleShortcut) : null;
     const holdKeys = this.holdShortcut ? this.parseShortcutToKeyCodes(this.holdShortcut) : null;
@@ -255,6 +277,7 @@ export class ShortcutManager {
       if (holdKeys && holdKeys.key !== null && e.keycode === holdKeys.key) {
         if (!this.isHoldPressed && this.checkModifiers(holdKeys)) {
           this.isHoldPressed = true;
+          this.holdGuard.activate(holdKeys.key);
           log.info('Hold shortcut pressed - starting recording');
           const win = this.getMainWindow();
           if (win) win.webContents.send('start-recording');
@@ -273,13 +296,9 @@ export class ShortcutManager {
         this.isTogglePressed = false;
       }
 
-      if (holdKeys && holdKeys.key !== null && e.keycode === holdKeys.key) {
-        if (this.isHoldPressed) {
-          this.isHoldPressed = false;
-          log.info('Hold shortcut released - stopping recording');
-          const win = this.getMainWindow();
-          if (win) win.webContents.send('stop-recording');
-        }
+      // With the guard running, only its report counts: a typed "x" can't end the hold
+      if (holdKeys && holdKeys.key !== null && e.keycode === holdKeys.key && !this.holdGuard.available) {
+        this.releaseHold();
       }
     });
 
@@ -291,6 +310,7 @@ export class ShortcutManager {
   }
 
   stop() {
+    this.holdGuard.stop();
     try {
       uIOhook.stop();
     } catch (e) {

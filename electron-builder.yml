@@ -43,6 +43,11 @@ asarUnpack:
   - "**/node_modules/uiohook-napi/**/*.node"
   - "**/node_modules/@nut-tree-fork/libnut-win32/**/*.node"
   - "**/node_modules/@nut-tree-fork/libnut-win32/**/*.dll"
+  # Hold-to-talk key guard runs in a worker thread, which can't read from the asar archive
+  - "dist/shortcuts/hold-key-guard-worker.js"
+  - "dist/shortcuts/hold-key-guard-shared.js"
+  - "**/node_modules/koffi/**/*"
+  - "**/node_modules/@koromix/**/*"
 
 win:
   target:
