@@ -1,478 +1,187 @@
-# Speech-to-Text Desktop App
+# Speech to Text
 
-A powerful, polished note-taking companion that transforms speech into searchable, organized, and beautifully formatted text using AI — with real-time streaming transcription.
+Dictate into any app on Windows. Press a shortcut, talk, and your words are typed into whatever window you're in (email, chat, docs, code editor) as you speak. Every dictation is saved to a searchable history.
 
-**Status**: ✅ Core Features Complete (Recording, Streaming Transcription, Search, Dictionary)
+Transcription is powered by [Deepgram](https://deepgram.com/) streaming, so text appears in real time instead of after you stop.
 
-[![Tests](https://img.shields.io/badge/tests-131%20passing-brightgreen)]()
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
-
----
-
-## Features
-
-### ✅ Current Features (Implemented)
-
-- **🎤 Multiple Recording Modes**
-  - Toggle mode: Click button to start/stop
-  - Push-to-Talk: Hold shortcut while speaking (with paste mode to prevent key state corruption)
-  - Pause/resume during recording
-  - Recording indicator: a glowing dot just above the taskbar that ripples outward as you speak; hover it to fan out cards for the timer and pause/stop (pause/stop hidden in hold-to-talk). Shows Connecting / Paused / Finishing states and appears on the monitor your mouse is on
-
-- **🤖 Deepgram Streaming Transcription** (choose in Settings)
-  - **Flux** (default): Model-integrated end-of-turn detection, so text is pasted in whole sentences
-  - **Nova-3**: Smart formatting (numbers, dates) and spoken punctuation ("comma", "period", "new line", "new paragraph")
-  - **Type as you speak** (default): words appear in your text box as they are heard and are corrected in place as Deepgram refines them. Only text the app typed is ever erased, and corrections stop if you switch windows
-  - Or paste each phrase once confirmed (Settings switch); your clipboard is always restored afterwards
-  - **Hands-free Enter:** pause, say **"period"** on its own, pause — the app presses Enter (e.g. to send a chat message) and keeps listening. Inside a sentence it's just a word. The phrase is configurable and is sent to Deepgram as a keyterm for reliable recognition
-  - Clear error messages (and a desktop notification when the window is hidden) if Deepgram can't connect or the connection drops
-
-- **📖 Custom Dictionary**
-  - Define custom phrase replacements (e.g., "gonna" → "going to")
-  - Whole-word matching, case-sensitive or case-insensitive
-  - Entries are also sent to Deepgram as **keyterms**, so names and jargon are recognized correctly in the first place
-  - Enable/disable individual entries without deleting
-
-- **⚡ Global Shortcuts**
-  - Customizable keyboard shortcuts (works even when app isn't focused)
-  - Default: `Command+Shift+Space` (macOS) or `Ctrl+Shift+Space` (Windows/Linux)
-  - Separate toggle and hold-to-record shortcuts
-  - Visual shortcut recorder with modifier key detection and conflict warnings
-  - Paste mode prevents modifier key corruption during push-to-talk
-
-- **💾 Persistent Storage & Full-Text Search**
-  - SQLite database with FTS5 full-text search
-  - All transcriptions saved automatically
-  - Instant search across all notes (<100ms)
-  - Advanced query syntax: `tag:work`, `#meeting`, `fav:true`, `date:today`
-  - Filter by favorites, date range, tags
-  - Export to JSON, Markdown, or plain text
-  - Auto-backup on app exit
-
-- **📋 Workflow Automation**
-  - Auto-paste formatted text to any application
-  - Native keyboard simulation via nut-js (Windows) or AppleScript (macOS)
-  - Recent transcriptions history with virtual scrolling
-  - Background operation with system tray
-  - Cross-platform paste support with serialized paste queue
-
-- **🎨 Visual Feedback**
-  - Dotted-ripple voice visualizer: loose concentric rings of dots burst outward with your voice and drift back into a glowing dot in silence
-  - Always-on-top, click-through pill that never takes focus from the app you are dictating into
-  - Status indicators (Ready, Starting, Recording, Paused, Processing)
-  - Dark theme with modern UI using Radix UI components
-
-### 📋 Planned Features
-
-See [FEATURES.md](FEATURES.md) for the complete feature roadmap including:
-- Smart formatting profiles (5 built-in styles)
-- Optional live preview with inline editing
-- Intelligent tagging with AI suggestions
-- Silence detection with auto-stop
-- And much more...
+[![Latest release](https://img.shields.io/github/v/release/pranshur28/speech-to-text-app)](https://github.com/pranshur28/speech-to-text-app/releases/latest)
+![Platform](https://img.shields.io/badge/platform-Windows%20x64-blue)
 
 ---
 
-## Install on Windows
+## Install
 
-Run this in PowerShell on any Windows x64 machine:
+### One command (recommended)
+
+Open **PowerShell** (press Start, type `PowerShell`, press Enter) and paste:
 
 ```powershell
 irm https://raw.githubusercontent.com/pranshur28/speech-to-text-app/main/install.ps1 | iex
 ```
 
-It downloads the newest installer from [Releases](https://github.com/pranshur28/speech-to-text-app/releases/latest), installs it for your user (no admin needed) and starts the app. Run it again any time to update; settings, history and dictionary are kept. On first run, add your Deepgram API key in Settings.
+This downloads the newest version from [Releases](https://github.com/pranshur28/speech-to-text-app/releases/latest), installs it for your Windows user (no admin rights needed) and starts the app.
 
-Prefer to do it by hand? Download **Speech to Text Setup x.y.z.exe** from the [latest release](https://github.com/pranshur28/speech-to-text-app/releases/latest) and run it (it's unsigned, so on the SmartScreen warning choose **More info → Run anyway**).
+**To update later**, run the same command again. Your settings, history and dictionary are kept.
 
----
+### Manual download
 
-## Quick Start (development)
+1. Go to the [latest release](https://github.com/pranshur28/speech-to-text-app/releases/latest).
+2. Download **Speech.to.Text.Setup.x.y.z.exe** and run it.
+3. Windows may show a blue **"Windows protected your PC"** screen because the app isn't code-signed. Click **More info → Run anyway**.
 
-### Prerequisites
+Prefer not to install? Download **Speech.to.Text.x.y.z.exe** instead. It's a portable version that runs without installing.
 
-- **Node.js 16+** and npm
-- **Operating System**: macOS, Windows, or Linux
-- **API Keys**:
-  - **Deepgram API key** (for real-time streaming transcription) — [Get one here](https://console.deepgram.com/)
+### Uninstall
 
-### Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/pranshur28/speech-to-text-app.git
-cd speech-to-text-app
-
-# 2. Install dependencies
-npm install
-
-# 3. Set up your API key (optional - can configure in app)
-cp .env.example .env
-# Edit .env and add: DEEPGRAM_API_KEY=your-key-here
-```
-
-### Running the App
-
-```bash
-# Development mode (with Electron hot reload)
-npm run dev:electron
-
-# Development mode (Vite dev server only, for React work)
-npm run dev
-
-# Build for distribution
-npm run dist
-```
+**Settings → Apps → Installed apps → Speech to Text → Uninstall.**
 
 ---
 
-## Usage
+## First-time setup
 
-### First-Time Setup
+1. **Get a Deepgram API key.** Sign up at [console.deepgram.com](https://console.deepgram.com/) (new accounts come with free credit) and create an API key.
+2. **Add the key to the app.** Open the **Settings** tab, paste the key into **Deepgram API key** and save.
+3. **Allow the microphone** if Windows asks. If it doesn't work, check **Windows Settings → Privacy & security → Microphone** and turn on microphone access for desktop apps.
 
-1. **Launch the app** — Run `npm run dev:electron`
-2. **Configure API Key** — Open the Settings tab and add your Deepgram API key
-3. **Grant Permissions**:
-   - **Microphone access** (for recording)
-   - **Accessibility permissions** (for auto-paste on macOS)
-
-### Recording & Transcription
-
-**Method 1: Toggle Mode (Default)**
-1. Press `Ctrl+Shift+Space` (or `Cmd+Shift+Space` on macOS)
-2. Speak naturally — words appear in the active window as you speak and are corrected in place
-3. Press the shortcut again to stop; the full transcript is saved to History
-
-**Method 2: Push-to-Talk Mode**
-1. Configure a hold shortcut in Settings
-2. Hold the shortcut while speaking
-3. Text is typed as you speak, even while the keys are held (on Windows; elsewhere, typing waits until you release a Ctrl/Shift/Alt hold key)
-4. Release to stop; the last words are finalized
-
-### Searching Your Notes
-
-- Switch to the **History** tab to browse all transcriptions
-- Use the search bar with full-text search across all notes
-- Special filters: `tag:work`, `#meeting`, `fav:true`, `date:today`
-- Click any note to view details, re-paste, copy, or export
-
-### Custom Dictionary
-
-- Open the **Settings** tab and scroll to the Dictionary section
-- Add phrase replacements (e.g., spoken "gonna" → replaced with "going to")
-- Toggle case sensitivity per entry
-- Enable/disable entries without deleting them
-- Enabled entries are sent to Deepgram as keyterms (up to ~450 tokens; the settings show how many)
-- To teach Deepgram a word without changing it, add it with itself as the replacement
+You're ready to dictate.
 
 ---
 
-## Configuration
+## How to use
 
-### Settings Panel
+Click into the place you want to type (a chat box, an email, a document), then use one of the two shortcuts. The app doesn't need to be in front; shortcuts work from anywhere.
 
-Access via the **Settings** tab:
+### Toggle mode: press to start, press to stop
 
-- **Deepgram API Key**: Required for real-time streaming transcription
-- **Transcription Model**: Flux (default, whole-sentence pasting) or Nova-3 (smart formatting + spoken punctuation)
-- **Toggle Shortcut**: Customize the toggle recording shortcut (default: `Ctrl+Shift+Space`)
-- **Hold Shortcut**: Customize the push-to-talk shortcut
-- **Custom Dictionary**: Manage phrase replacements
+| Step | What to do |
+|------|------------|
+| Start | Press **Ctrl+Shift+Space** (the default; change it under **Start / stop** in Settings) |
+| Talk | Words appear as you speak and are corrected in place as the transcription firms up |
+| Stop | Press **Ctrl+Shift+Space** again |
 
-### Keyboard Shortcuts
+Best for longer dictation. You can pause and resume from the recording indicator.
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+Shift+Space` (macOS) | Toggle recording |
-| `Ctrl+Shift+Space` (Windows/Linux) | Toggle recording |
-| Custom hold shortcut | Hold to record (if configured) |
+### Push-to-talk: hold to talk, let go to stop
 
----
+Set a **Hold to talk** shortcut in **Settings** first (for example **Ctrl+Shift+X**). Then:
 
-## Testing
+1. Hold the shortcut down.
+2. Talk. Text is typed while you're still holding the keys.
+3. Let go to stop.
 
-Comprehensive test suite with **~131 tests** covering:
+Best for quick messages.
 
-```bash
-# Run all tests
-npm test
+### The recording indicator
 
-# Run tests in watch mode
-npm run test:watch
+While recording, a glowing dot appears just above the taskbar on the monitor your mouse is on, and ripples outward as you speak. Hover over it to show the timer and the **pause** and **stop** buttons. The buttons are hidden in push-to-talk, where letting go stops. It never takes focus away from the app you're typing into.
 
-# Run tests with coverage report
-npm run test:coverage
-```
+### Press Enter with your voice
 
-**Test Coverage:**
-- ✅ DatabaseService: CRUD, search, export, backup/restore
-- ✅ SearchService: Query parsing, filtering, pagination
-- ✅ Integration tests: Complete workflow coverage
-- ✅ UI Components: SearchBar, NoteCard, NoteList rendering
+Pause, say **"period"** on its own, then pause again, and the app presses **Enter** (handy for sending a chat message) and keeps listening. Said in the middle of a sentence, "period" is just a word. You can change the phrase or turn this off in **Settings → Voice commands**.
 
----
+### History
 
-## Privacy & Security
+Every dictation is saved. Open the **History** tab to:
 
-### What's Stored Locally
-- ✅ Transcriptions (in local SQLite database)
-- ✅ API keys (in `{userData}/config.json`)
-- ✅ Custom dictionary entries (in SQLite database)
-- ✅ Settings (in localStorage and config)
-- ✅ Database backups (`.bak` file created on exit)
+- **Search** everything you've said. Filters such as `fav:true`, `date:today`, `tag:work` or `#meeting` narrow it down.
+- **Open** a note to copy it, favorite it or delete it.
 
-### What's Sent Externally
-- ⚠️ Audio stream (to Deepgram for real-time transcription)
-- ⚠️ Enabled dictionary terms (to Deepgram as keyterms)
+### Custom dictionary
 
-### What's NOT Collected
-- ❌ No telemetry or analytics
-- ❌ No cloud storage of transcriptions
-- ❌ No account registration required
-- ❌ No data sharing with third parties
+In **Settings → Dictionary**, add words the app should get right. Each entry is **When I say** → **Write**:
 
-### Security Features
-- Local-only storage (never leaves your computer except for API calls)
-- Electron context isolation with secure preload bridge (no `nodeIntegration`)
-- API key validation before saving
-- Database auto-backup on exit
+- **Fix recurring mistakes:** "gonna" → "going to", "react js" → "React.js".
+- **Teach names and jargon:** add the word with itself as the replacement (e.g. "Kubernetes" → "Kubernetes"). Dictionary words are also sent to Deepgram as hints, so they're recognized correctly in the first place.
+- Turn entries on or off without deleting them.
+
+### Settings at a glance
+
+| Setting | What it does |
+|---------|--------------|
+| **Deepgram API key** | Required for transcription |
+| **Model** | **Flux** (default): finishes whole sentences cleanly. **Nova-3**: formats numbers and dates and understands spoken punctuation ("comma", "new line", "new paragraph") |
+| **Type as you speak** | On (default): words appear live. Off: each phrase is pasted once it's final (your clipboard is restored afterwards) |
+| **Start / stop** and **Hold to talk** | Change either shortcut: click the field and press the keys you want |
+| **Voice commands** | **Press Enter by voice** on or off, and the **Phrase** that triggers it |
+
+### Closing the app
+
+Closing the window keeps the app running in the **system tray** (bottom-right, near the clock) so your shortcuts keep working. To fully exit, right-click the tray icon → **Quit**.
 
 ---
 
 ## Troubleshooting
 
-### Microphone Access Denied
-
-**macOS:**
-```
-System Preferences → Security & Privacy → Microphone
-→ Check the box next to the app
-```
-
-**Windows:**
-```
-Settings → Privacy & Security → Microphone
-→ Allow apps to access your microphone
-```
-
-**Linux:**
-```
-Check your audio settings and ensure the app has microphone permissions
-```
-
-### Auto-Paste Not Working
-
-**macOS:**
-```
-System Preferences → Security & Privacy → Accessibility
-→ Add the app and check the box
-```
-
-**Windows/Linux:**
-- Ensure the app has permission to simulate keyboard input
-- Some applications may block simulated paste events
-
-### API Key Errors
-
-- ✅ Verify your Deepgram key and credit at [Deepgram Console](https://console.deepgram.com/)
-- ✅ Try re-entering the key in Settings
-- ✅ A "400" error with many dictionary entries means the keyterm list was rejected — disable some entries
-
-### Database Issues
-
-- Database is stored at: `{userData}/data/transcriptions.db`
-- Backup file: `{userData}/data/transcriptions.db.bak`
-- If corrupted, delete the `.db` file and restart (backup will be used)
-
-### Empty Transcriptions
-
-- Check your microphone is working (test in another app)
-- Ensure you're speaking clearly and loud enough
-- Try adjusting microphone volume in system settings
-- Check background noise isn't too loud
+| Problem | Fix |
+|---------|-----|
+| **Nothing gets typed** | Make sure the cursor is in a text box before you start. Some apps that run as administrator block typed input from regular apps. |
+| **"Deepgram rejected the API key"** | Re-enter the key in Settings and check you still have credit at [console.deepgram.com](https://console.deepgram.com/). |
+| **Error mentioning "400" with a big dictionary** | Too many dictionary hints. Turn some entries off. |
+| **Empty transcription / "No speech detected"** | Check the right microphone is selected in Windows sound settings and that it works in another app. |
+| **Shortcut does nothing** | Another app may use the same shortcut. Pick a different one in Settings. Only run one copy of the app at a time. |
+| **Recording stops with "Connection lost"** | Your internet dropped. Everything transcribed up to that point was already typed and saved. |
 
 ---
 
-## Development
+## Privacy
 
-### Project Structure
+- **Stays on your computer:** your history, dictionary, settings and API key (in `%APPDATA%\speech-to-text-app`).
+- **Sent to Deepgram:** your audio while recording, and your enabled dictionary words, for transcription only.
+- **Never collected:** no accounts, analytics or telemetry. No cloud copy of your notes.
 
-```
-speech-to-text-app/
-├── src/
-│   ├── main.ts                          # Electron main process
-│   ├── preload.ts                       # Secure IPC bridge
-│   ├── renderer/                        # React UI
-│   │   ├── App.tsx                      # Main component with tab navigation
-│   │   ├── Overlay.tsx                  # Floating recording indicator (dotted ripples + card fan)
-│   │   ├── styles.css                   # Main styling
-│   │   ├── overlay.css                  # Overlay styling
-│   │   └── components/
-│   │       ├── SearchBar.tsx            # Debounced search with filter syntax
-│   │       ├── NoteList.tsx             # Virtualized note list (react-window)
-│   │       ├── NoteCard.tsx             # Individual transcription card
-│   │       ├── NoteDetailModal.tsx      # Full note view modal
-│   │       ├── FilterPanel.tsx          # Date/favorite/tag filters
-│   │       ├── DictionarySettings.tsx   # Custom phrase replacement UI
-│   │       ├── TopBar.tsx               # Status + tab navigation
-│   │       ├── ContextualFooter.tsx     # Working keyboard shortcut hints
-│   │       └── ErrorBoundary.tsx        # React error boundary
-│   ├── services/                        # Business logic
-│   │   ├── deepgram.ts                  # Deepgram WebSocket streaming
-│   │   ├── paste.ts                     # Cross-platform paste with modifier awareness
-│   │   ├── dictionary.ts               # Custom phrase replacements
-│   │   ├── database.ts                  # SQLite + FTS5
-│   │   ├── search.ts                    # Search service with query parsing
-│   │   └── config.ts                    # Config management
-│   ├── shortcuts/
-│   │   └── shortcut-manager.ts          # Global keyboard hooks with paste mode
-│   ├── ipc/                             # IPC handler modules
-│   │   ├── deepgram.ts                  # Streaming sessions, live paste, key + model settings
-│   │   ├── dictionary.ts               # Dictionary CRUD handlers
-│   │   ├── database.ts                  # Database query handlers
-│   │   ├── overlay.ts                   # Overlay window control
-│   │   └── shortcuts.ts                # Shortcut management
-│   └── __tests__/                       # Test files
-├── FEATURES.md                          # Complete feature documentation
-├── PROGRESS.md                          # Implementation progress tracker
-├── QUICKSTART.md                        # Quick start guide
-├── electron-builder.yml                 # Electron builder config
-├── jest.config.js                       # Jest configuration
-├── package.json                         # Dependencies
-└── README.md                            # This file
+---
+
+## For developers
+
+<details>
+<summary>Build and run from source</summary>
+
+### Requirements
+
+- Windows x64, **Node.js 18+**
+- **Visual Studio Build Tools** with the "Desktop development with C++" workload (native modules such as better-sqlite3 compile during `npm install`)
+
+### Setup
+
+```powershell
+git clone https://github.com/pranshur28/speech-to-text-app.git
+cd speech-to-text-app
+npm install
 ```
 
-### Tech Stack
-
-| Technology | Purpose |
-|------------|---------|
-| **Electron 27** | Desktop application framework |
-| **React 18** | UI components |
-| **TypeScript 5.3** | Type-safe JavaScript |
-| **Vite 5** | Fast build tool |
-| **SQLite** (better-sqlite3) | Local database with FTS5 |
-| **Deepgram Flux / Nova-3** | Real-time streaming transcription |
-| **uiohook-napi** | Global keyboard shortcuts |
-| **@nut-tree-fork/nut-js** | Native keyboard simulation (Windows) |
-| **ws** | WebSocket client for Deepgram |
-| **Radix UI** | Accessible UI primitives |
-| **react-window** | Virtualized list rendering |
-| **date-fns** | Date utilities |
-| **electron-log** | Logging |
-| **Jest** | Testing framework |
+Optionally copy `.env.example` to `.env` and set `DEEPGRAM_API_KEY`, or enter the key in the app.
 
 ### Scripts
 
-```bash
-# Development
-npm run dev              # Start Vite dev server + TypeScript watch
-npm run dev:electron     # Start with Electron auto-reload
-npm run build           # TypeScript compile + Vite build
+| Command | What it does |
+|---------|--------------|
+| `npm run dev:electron` | Run the app with hot reload |
+| `npm test` | Run the test suite (Jest) |
+| `npm run dist` | Build the installer and portable exe into `release/` |
 
-# Testing
-npm test                # Run all tests
-npm run test:watch      # Run tests in watch mode
-npm run test:coverage   # Generate coverage report
+Close the installed app before running the dev build: they share one data folder and the same global shortcuts. Close the dev app before `npm run dist`, or the native module rebuild fails with `EPERM`.
 
-# Production
-npm run dist            # Build distributable packages
-```
+### Releasing
 
----
+1. Bump the version: `npm version x.y.z --no-git-tag-version`, then commit.
+2. `npm run dist`
+3. Push, then publish a GitHub release with `release\Speech to Text Setup x.y.z.exe` and the portable exe attached. `install.ps1` always installs the asset named `*Setup*.exe` from the latest release.
 
-## Building for Distribution
+### How it works
 
-Create installers for your platform:
+| Part | Where |
+|------|-------|
+| Electron main process, windows, tray | `src/main.ts` |
+| Deepgram streaming (Flux / Nova-3 over WebSocket) | `src/services/deepgram.ts`, `src/ipc/deepgram.ts` |
+| Live typing with in-place correction | `src/services/live-typer.ts` |
+| Clipboard paste and key simulation (nut-js) | `src/services/paste.ts` |
+| Global shortcuts (uiohook) | `src/shortcuts/shortcut-manager.ts` |
+| Typing while push-to-talk is held (Windows keyboard hook via koffi, on a worker thread) | `src/shortcuts/hold-key-guard*.ts` |
+| History storage and full-text search (SQLite FTS5) | `src/services/database.ts`, `src/services/search.ts` |
+| React UI and recording indicator | `src/renderer/` |
 
-```bash
-npm run dist
-```
+**Stack:** Electron 27, React 18, TypeScript, Vite, better-sqlite3, uiohook-napi, nut-js, koffi, Radix UI, Jest.
 
-Output will be in the `release/` directory:
-- **macOS**: `.dmg` installer + `.zip`
-- **Windows**: NSIS `.exe` installer + portable `.exe`
-- **Linux**: `.AppImage` and `.deb` packages
+More detail: [FEATURES.md](FEATURES.md).
 
-Native modules (better-sqlite3, uiohook-napi, nut-js) are automatically unpacked from the ASAR archive for compatibility.
-
----
-
-## Roadmap
-
-### ✅ Phase 1: Foundation (Complete)
-- [x] Persistent storage with SQLite
-- [x] Full-text search with FTS5
-- [x] Comprehensive test suite
-- [x] Database integration
-- [x] Auto-backup system
-
-### ✅ Deepgram Streaming Integration (Complete)
-- [x] Real-time WebSocket streaming transcription
-- [x] Interim + final result handling
-- [x] Live paste during recording
-- [x] Serialized paste queue
-
-### ✅ Dictionary & Paste Improvements (Complete)
-- [x] Custom dictionary with CRUD operations
-- [x] Paste mode to prevent key state corruption
-- [x] Native keyboard simulation (nut-js)
-- [x] Build configuration for packaged Windows EXE
-
-### 📋 Phase 2: Smart Formatting
-- [ ] 5 formatting profiles
-- [ ] Optional live preview
-- [ ] Inline text editing
-- [ ] Profile customization
-
-### 📋 Phase 3: Workflow Flexibility
-- [ ] Flexible paste modes (immediate, clipboard-only, save-only)
-- [ ] Quick actions & shortcuts
-- [ ] Intelligent tagging with AI suggestions
-- [ ] Tag management UI
-
-### 📋 Phase 4: Recording Enhancements
-- [ ] Silence detection
-- [ ] Auto-stop on silence
-- [ ] Final polish & accessibility
-
-See [FEATURES.md](FEATURES.md) for complete roadmap and future enhancements.
-
----
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Read [FEATURES.md](FEATURES.md) to understand the vision
-2. Create an issue to discuss your idea
-3. Write tests for new features
-4. Follow the existing code style
-5. Update documentation
-
----
-
-## License
-
-This project is open source and available under the **MIT License**.
-
----
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/pranshur28/speech-to-text-app/issues)
-- **Documentation**: [FEATURES.md](FEATURES.md)
-- **Quick Start**: [QUICKSTART.md](QUICKSTART.md)
-- **Tests**: Run `npm test` to verify functionality
-
----
-
-## Acknowledgments
-
-- Built with [Electron](https://www.electronjs.org/)
-- Powered by [Deepgram](https://deepgram.com/) (Flux and Nova-3 streaming)
-- UI built with [Radix UI](https://www.radix-ui.com/) primitives
-
----
-
-**Version**: 1.0.0
-**Last Updated**: 2026-03-25
+</details>
