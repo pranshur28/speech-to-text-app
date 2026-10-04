@@ -112,6 +112,9 @@ export function registerOverlayHandlers(ctx: ServiceContext) {
     overlayWindow.webContents.send('overlay:state', state);
     if (!overlayWindow.isVisible()) {
       overlayWindow.showInactive();
+      // Windows drops the topmost level of a hidden, non-focusable window, so reassert it on every show
+      overlayWindow.setAlwaysOnTop(true, 'screen-saver');
+      overlayWindow.moveTop();
     }
   });
 
