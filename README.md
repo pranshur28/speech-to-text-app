@@ -73,7 +73,21 @@ See [FEATURES.md](FEATURES.md) for the complete feature roadmap including:
 
 ---
 
-## Quick Start
+## Install on Windows
+
+Run this in PowerShell on any Windows x64 machine:
+
+```powershell
+irm https://raw.githubusercontent.com/pranshur28/speech-to-text-app/main/install.ps1 | iex
+```
+
+It downloads the newest installer from [Releases](https://github.com/pranshur28/speech-to-text-app/releases/latest), installs it for your user (no admin needed) and starts the app. Run it again any time to update; settings, history and dictionary are kept. On first run, add your Deepgram API key in Settings.
+
+Prefer to do it by hand? Download **Speech to Text Setup x.y.z.exe** from the [latest release](https://github.com/pranshur28/speech-to-text-app/releases/latest) and run it (it's unsigned, so on the SmartScreen warning choose **More info → Run anyway**).
+
+---
+
+## Quick Start (development)
 
 ### Prerequisites
 
@@ -132,7 +146,8 @@ npm run dist
 **Method 2: Push-to-Talk Mode**
 1. Configure a hold shortcut in Settings
 2. Hold the shortcut while speaking
-3. Release to stop; the last words are finalized (if the hold key includes Ctrl/Shift/Alt, typing waits until you release it)
+3. Text is typed as you speak, even while the keys are held (on Windows; elsewhere, typing waits until you release a Ctrl/Shift/Alt hold key)
+4. Release to stop; the last words are finalized
 
 ### Searching Your Notes
 
