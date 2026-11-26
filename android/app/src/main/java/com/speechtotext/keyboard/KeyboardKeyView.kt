@@ -16,11 +16,23 @@ import android.view.ViewConfiguration
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 
+/** Visual role for Matte Graphite keycap rendering. */
+enum class KeyStyle {
+    LETTER,
+    MODIFIER,
+    MODIFIER_ACTIVE,
+    SPACE,
+    ACTION,
+    TOOLBAR,
+    MIC,
+    MIC_ACTIVE,
+}
+
 /**
  * Lightweight canvas-drawn key view:
- * - Draws its own inset rounded background (zero inter-key touch dead zones, no RippleDrawable overhead).
+ * - Draws its own inset rounded Matte Graphite keycap + subtle drop shadow (zero dead zones, no RippleDrawable).
  * - Handles touch/slop/long-press directly without allocating synthetic MotionEvent objects.
- * - Label updates only invalidate without triggering TextView relayout.
+ * - Label & style updates only invalidate without triggering TextView relayout.
  */
 class KeyboardKeyView(context: Context) : View(context) {
     var feedbackEnabled = true
@@ -32,27 +44,41 @@ class KeyboardKeyView(context: Context) : View(context) {
     private val handler = Handler(Looper.getMainLooper())
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
     private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
-    private val insetX = dp(2).toFloat()
-    private val insetY = dp(3).toFloat()
-    private val cornerRadius = dp(9).toFloat()
+    private val insetX = dp(2.5f)
+    private val insetY = dp(3.5f)
+    private val shadowOffsetY = dp(1.5f)
+    private val keyCornerRadius = dp(8f)
+    private val pillCornerRadius = dp(16f)
     private val keyRect = RectF()
-    private val normalFillColor = Color.rgb(35, 38, 45)
-    private val pressedFillColor = Color.rgb(91, 111, 143)
+    private val shadowRect = RectF()
+    private val regularTypeface = Typeface.create("sans-serif", Typeface.NORMAL)
+    private val mediumTypeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.rgb(10, 11, 16)
+    }
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = normalFillColor
+        color = Color.rgb(42, 46, 56)
     }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(238, 240, 244)
+        color = Color.rgb(242, 244, 248)
         textSize = sp(20f)
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+        typeface = regularTypeface
     }
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(150, 155, 166)
+        color = Color.rgb(139, 147, 166)
         textSize = sp(10f)
         textAlign = Paint.Align.RIGHT
     }
+    var keyStyle: KeyStyle = KeyStyle.LETTER
+        set(value) {
+            if (field == value) return
+            field = value
+            applyStylePaint()
+            invalidate()
+        }
     var text: CharSequence = ""
         set(value) {
             if (field.toString() == value.toString()) return
@@ -173,16 +199,56 @@ class KeyboardKeyView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        keyRect.set(insetX, insetY, (width - insetX).coerceAtLeast(insetX), (height - insetY).coerceAtLeast(insetY))
-        backgroundPaint.color = if (isPressed) pressedFillColor else normalFillColor
-        canvas.drawRoundRect(keyRect, cornerRadius, cornerRadius, backgroundPaint)
+        val left = insetX
+        val top = insetY
+        val right = (width - insetX).coerceAtLeast(left)
+        val bottom = (height - insetY).coerceAtLeast(top)
+        val radius = when (keyStyle) {
+            KeyStyle.SPACE, KeyStyle.ACTION, KeyStyle.TOOLBAR, KeyStyle.MIC, KeyStyle.MIC_ACTIVE ->
+                minOf(pillCornerRadius, (bottom - top) / 2f)
+            else -> keyCornerRadius
+        }
+        val hasShadow = keyStyle != KeyStyle.TOOLBAR && !isPressed
+        if (hasShadow && bottom > top) {
+            shadowRect.set(left, top + shadowOffsetY, right, bottom + shadowOffsetY)
+            canvas.drawRoundRect(shadowRect, radius, radius, shadowPaint)
+        }
+        keyRect.set(left, top, right, bottom)
+        backgroundPaint.color = fillColor(isPressed)
+        canvas.drawRoundRect(keyRect, radius, radius, backgroundPaint)
         val label = text.toString()
         if (label.isNotEmpty()) {
             val metrics = labelPaint.fontMetrics
             val baseline = height / 2f - (metrics.ascent + metrics.descent) / 2f
             canvas.drawText(label, width / 2f, baseline, labelPaint)
         }
-        alternate?.let { canvas.drawText(it, width - insetX - dp(6), insetY + dp(12), hintPaint) }
+        alternate?.let { canvas.drawText(it, right - dp(5f), top + dp(11f), hintPaint) }
+    }
+
+    private fun applyStylePaint() {
+        labelPaint.color = when (keyStyle) {
+            KeyStyle.SPACE -> Color.rgb(142, 151, 170)
+            KeyStyle.MODIFIER -> Color.rgb(212, 218, 232)
+            KeyStyle.ACTION, KeyStyle.MIC_ACTIVE -> Color.WHITE
+            KeyStyle.MIC -> Color.rgb(207, 224, 255)
+            KeyStyle.TOOLBAR -> Color.rgb(206, 214, 230)
+            else -> Color.rgb(242, 244, 248)
+        }
+        labelPaint.typeface = when (keyStyle) {
+            KeyStyle.ACTION, KeyStyle.MIC, KeyStyle.MIC_ACTIVE, KeyStyle.MODIFIER_ACTIVE -> mediumTypeface
+            else -> regularTypeface
+        }
+    }
+
+    private fun fillColor(pressed: Boolean): Int = when (keyStyle) {
+        KeyStyle.LETTER -> if (pressed) Color.rgb(66, 74, 94) else Color.rgb(42, 46, 56)
+        KeyStyle.MODIFIER -> if (pressed) Color.rgb(48, 54, 69) else Color.rgb(29, 32, 40)
+        KeyStyle.MODIFIER_ACTIVE -> if (pressed) Color.rgb(74, 96, 143) else Color.rgb(57, 75, 114)
+        KeyStyle.SPACE -> if (pressed) Color.rgb(59, 66, 84) else Color.rgb(37, 41, 51)
+        KeyStyle.ACTION -> if (pressed) Color.rgb(108, 147, 255) else Color.rgb(79, 124, 255)
+        KeyStyle.TOOLBAR -> if (pressed) Color.rgb(45, 50, 64) else Color.rgb(28, 31, 39)
+        KeyStyle.MIC -> if (pressed) Color.rgb(53, 69, 106) else Color.rgb(37, 48, 74)
+        KeyStyle.MIC_ACTIVE -> if (pressed) Color.rgb(240, 104, 119) else Color.rgb(224, 79, 95)
     }
 
     override fun onDetachedFromWindow() {
@@ -196,6 +262,6 @@ class KeyboardKeyView(context: Context) : View(context) {
         invalidate()
     }
 
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    private fun dp(value: Float) = value * resources.displayMetrics.density
     private fun sp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, resources.displayMetrics)
 }

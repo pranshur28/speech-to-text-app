@@ -23,9 +23,9 @@ import androidx.emoji2.emojipicker.EmojiPickerView
 internal class KeyPreviewView(context: Context) : View(context) {
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 32f, resources.displayMetrics)
+        textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 30f, resources.displayMetrics)
         textAlign = Paint.Align.CENTER
-        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
 
     var label: CharSequence = ""
@@ -36,16 +36,18 @@ internal class KeyPreviewView(context: Context) : View(context) {
         }
 
     init {
+        val density = resources.displayMetrics.density
         background = GradientDrawable().apply {
-            cornerRadius = 12 * resources.displayMetrics.density
-            setColor(Color.rgb(73, 91, 121))
+            cornerRadius = 14 * density
+            setColor(Color.rgb(59, 70, 94))
+            setStroke((1 * density).toInt().coerceAtLeast(1), Color.rgb(88, 104, 138))
         }
         visibility = INVISIBLE
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         contentDescription = "Pressed key preview"
         isClickable = false
         isFocusable = false
-        elevation = 6 * resources.displayMetrics.density
+        elevation = 8 * density
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -92,8 +94,8 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
     private var emojiPicker: EmojiPickerView? = null
 
     init {
-        setBackgroundColor(Color.rgb(18, 20, 25))
-        setPadding(dp(4), dp(4), dp(4), dp(24))
+        setBackgroundColor(Color.rgb(18, 19, 24))
+        setPadding(dp(4), dp(2), dp(4), dp(24))
         addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(preview, LayoutParams(dp(58), dp(60)))
     }
@@ -106,7 +108,7 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
             insets.systemWindowInsetBottom
         }
         // Keep the footer above the system gesture area, including on Samsung devices.
-        setPadding(dp(4), dp(4), dp(4), maxOf(dp(24), bottom))
+        setPadding(dp(4), dp(2), dp(4), maxOf(dp(24), bottom))
         return super.onApplyWindowInsets(insets)
     }
 
@@ -123,18 +125,29 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val split = KeyboardLayouts.shouldSplit(widthDp, landscape, next.split)
         val keyHeight = if (landscape && resources.configuration.screenHeightDp < 500) 44 else 50
-        val toolbar = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        content.addView(toolbar, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(44)))
-        toolbar.addView(control("⋯", "Keyboard settings", next) { actions.onSettings() }, weighted(0.9f))
-        toolbar.addView(control("⌨", "Switch keyboard", next) { actions.onSwitchKeyboard() }, weighted(0.9f))
+        val divider = View(context).apply { setBackgroundColor(Color.rgb(34, 38, 49)) }
+        content.addView(divider, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(1).coerceAtLeast(1)))
+        val toolbar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(2), 0, dp(2))
+        }
+        content.addView(toolbar, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(46)))
+        toolbar.addView(control("⋯", "Keyboard settings", next, KeyStyle.TOOLBAR) { actions.onSettings() }, weighted(0.95f))
+        toolbar.addView(control("🌐", "Switch keyboard", next, KeyStyle.TOOLBAR) { actions.onSwitchKeyboard() }, weighted(0.95f))
         status = TextView(context).apply {
-            text = next.message; textSize = 11f; setTextColor(Color.rgb(160, 168, 183))
-            gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), 0, dp(6), 0)
+            text = next.message; textSize = 11.5f; setTextColor(Color.rgb(148, 158, 178))
+            gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), 0, dp(8), 0)
             maxLines = 2
         }.also { toolbar.addView(it, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 4f)) }
-        mic = control(if (next.recording) "Stop" else "Mic", "Start or stop dictation", next) { actions.onMic() }.apply {
+        mic = control(
+            if (next.recording) "Stop" else "Mic",
+            "Start or stop dictation",
+            next,
+            if (next.recording) KeyStyle.MIC_ACTIVE else KeyStyle.MIC,
+        ) { actions.onMic() }.apply {
             isEnabled = !next.password; alpha = if (next.password) 0.35f else 1f
-        }.also { toolbar.addView(it, weighted(1.3f)) }
+        }.also { toolbar.addView(it, weighted(1.35f)) }
 
         if (next.page == KeyboardPage.EMOJI) {
             val picker = emojiPicker ?: EmojiPickerView(context).also { emojiPicker = it }
@@ -157,7 +170,10 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
 
     fun updateStatus(message: String, recording: Boolean) {
         if (state?.message != message) status?.text = message
-        if (state?.recording != recording) mic?.setText(if (recording) R.string.stop else R.string.mic)
+        if (state?.recording != recording) {
+            mic?.setText(if (recording) R.string.stop else R.string.mic)
+            mic?.keyStyle = if (recording) KeyStyle.MIC_ACTIVE else KeyStyle.MIC
+        }
         state = state?.copy(message = message, recording = recording)
     }
 
@@ -174,7 +190,14 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
             key.text = value
             key.contentDescription = value
         }
-        shiftKey?.text = if (capsLock) "⇪" else "⇧"
+        shiftKey?.let {
+            it.text = if (capsLock) "⇪" else "⇧"
+            it.keyStyle = when {
+                capsLock -> KeyStyle.ACTION
+                shifted -> KeyStyle.MODIFIER_ACTIVE
+                else -> KeyStyle.MODIFIER
+            }
+        }
     }
 
     fun dismissFeedback() {
@@ -223,10 +246,21 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
 
     private fun makeKey(spec: KeySpec, state: State): KeyboardKeyView {
         val label = if (spec.action == KeyAction.SHIFT && state.capsLock) "⇪" else spec.label
+        val style = when (spec.action) {
+            KeyAction.ENTER -> KeyStyle.ACTION
+            KeyAction.SPACE -> KeyStyle.SPACE
+            KeyAction.SHIFT -> when {
+                state.capsLock -> KeyStyle.ACTION
+                state.shifted -> KeyStyle.MODIFIER_ACTIVE
+                else -> KeyStyle.MODIFIER
+            }
+            KeyAction.DELETE, KeyAction.PAGE, KeyAction.EMOJI -> KeyStyle.MODIFIER
+            KeyAction.TEXT -> if (spec.output == "," || spec.output == ".") KeyStyle.MODIFIER else KeyStyle.LETTER
+        }
         val key = control(label, when (spec.action) {
             KeyAction.SHIFT -> "Shift"; KeyAction.DELETE -> "Backspace"; KeyAction.EMOJI -> "Emoji"
             KeyAction.PAGE -> "Switch to ${spec.page?.name?.lowercase()}"; KeyAction.SPACE -> "Space"; else -> label
-        }, state) { actions.onKey(spec) }
+        }, state, style) { actions.onKey(spec) }
         key.tag = spec
         if (spec.action == KeyAction.TEXT && spec.output.length == 1 && spec.output[0].isLetter()) {
             letterKeys.add(key)
@@ -264,7 +298,14 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         return key
     }
 
-    private fun control(label: String, description: String, state: State, action: () -> Unit) = KeyboardKeyView(context).apply {
+    private fun control(
+        label: String,
+        description: String,
+        state: State,
+        style: KeyStyle = KeyStyle.LETTER,
+        action: () -> Unit,
+    ) = KeyboardKeyView(context).apply {
+        keyStyle = style
         text = label; textSize = if (label.length > 2) 13f else 20f
         feedbackEnabled = state.haptics
         contentDescription = description
