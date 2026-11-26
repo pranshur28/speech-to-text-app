@@ -4,6 +4,8 @@ Dictate into any app on Windows. Press a shortcut, talk, and your words are type
 
 Transcription is powered by [Deepgram](https://deepgram.com/) streaming, so text appears in real time instead of after you stop.
 
+An Android keyboard with normal typing and optional dictation is being developed in [`android/`](android/README.md). See its README for building, installation, and device testing.
+
 [![Latest release](https://img.shields.io/github/v/release/pranshur28/speech-to-text-app)](https://github.com/pranshur28/speech-to-text-app/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64-blue)
 

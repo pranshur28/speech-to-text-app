@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Speech Keyboard</string>
+    <string name="keyboard_language">English (US)</string>
+    <string name="mic">Mic</string>
+    <string name="stop">Stop</string>
+    <string name="setup_status">API key: %1$s  •  Microphone: %2$s</string>
+    <string name="saved">saved</string>
+    <string name="not_set">not set</string>
+    <string name="allowed">allowed</string>
+    <string name="not_allowed">not allowed</string>
+</resources>
