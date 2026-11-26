@@ -338,4 +338,19 @@ class KeyboardUiTest {
         assertEquals(View.INVISIBLE, bar.visibility)
         assertFalse("Clearing suggestions must not trigger keyboard relayout", surface.isLayoutRequested)
     }
+
+    @Test fun `redesigned settings screen shows live status badges and dictionary summary`() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val dict = WordDictionary(context)
+        dict.clearLearned()
+        dict.recordWord("Kubernetes")
+        dict.addShortcut("omw", "On my way!")
+        val activity = Robolectric.buildActivity(SetupActivity::class.java).setup().get()
+        val texts = descendants(activity.findViewById(android.R.id.content))
+            .filterIsInstance<android.widget.TextView>()
+            .map { it.text.toString() }
+        assertTrue(texts.any { it.contains("API key") })
+        assertTrue(texts.any { it.contains("Mic") })
+        assertTrue(texts.any { it.contains("1 learned words") && it.contains("1 shortcuts") })
+    }
 }
