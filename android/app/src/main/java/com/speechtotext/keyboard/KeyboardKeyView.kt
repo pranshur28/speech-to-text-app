@@ -11,12 +11,15 @@ import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Handler
 import android.os.Looper
+import android.util.TypedValue
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 
-/** Native click semantics, with feedback on touch-down and a distinct pressed background. */
-class KeyboardKeyView(context: Context) : Button(context) {
+/** Lightweight canvas-drawn key view: label updates only invalidate without triggering TextView relayout. */
+class KeyboardKeyView(context: Context) : View(context) {
     var feedbackEnabled = true
     var alternate: String? = null
     var onPreview: ((KeyboardKeyView, Boolean) -> Unit)? = null
@@ -24,11 +27,32 @@ class KeyboardKeyView(context: Context) : Button(context) {
     var onRepeat: (() -> Unit)? = null
     private var longPressConsumed = false
     private val handler = Handler(Looper.getMainLooper())
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(238, 240, 244)
+        textSize = sp(20f)
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+    }
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(150, 155, 166)
-        textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 10f, resources.displayMetrics)
+        textSize = sp(10f)
         textAlign = Paint.Align.RIGHT
     }
+    var text: CharSequence = ""
+        set(value) {
+            if (field.toString() == value.toString()) return
+            field = value
+            invalidate()
+        }
+    var textSize: Float = 20f
+        set(value) {
+            if (field == value) return
+            field = value
+            labelPaint.textSize = sp(value)
+            invalidate()
+        }
+    fun setText(resId: Int) { text = context.getString(resId) }
+
     private val repeat = object : Runnable {
         override fun run() {
             if (!isPressed || !isAttachedToWindow) return
@@ -38,11 +62,10 @@ class KeyboardKeyView(context: Context) : Button(context) {
     }
 
     init {
-        isAllCaps = false; minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
-        setPadding(0, 0, 0, 0)
-        setTextColor(Color.rgb(238, 240, 244))
-        textSize = 20f
-        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+        isClickable = true
+        isLongClickable = true
+        minimumWidth = 0
+        minimumHeight = 0
         stateListAnimator = null
         background = makeBackground()
         setOnLongClickListener {
@@ -100,8 +123,20 @@ class KeyboardKeyView(context: Context) : Button(context) {
         return consumed
     }
 
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.className = Button::class.java.name
+        info.text = text
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        val label = text.toString()
+        if (label.isNotEmpty()) {
+            val metrics = labelPaint.fontMetrics
+            val baseline = height / 2f - (metrics.ascent + metrics.descent) / 2f
+            canvas.drawText(label, width / 2f, baseline, labelPaint)
+        }
         alternate?.let { canvas.drawText(it, width - dp(6).toFloat(), dp(12).toFloat(), hintPaint) }
     }
 
@@ -122,4 +157,5 @@ class KeyboardKeyView(context: Context) : Button(context) {
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    private fun sp(value: Float) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, value, resources.displayMetrics)
 }

@@ -86,6 +86,8 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
     private var state: State? = null
     private var status: TextView? = null
     private var mic: KeyboardKeyView? = null
+    private val letterKeys = mutableListOf<KeyboardKeyView>()
+    private var shiftKey: KeyboardKeyView? = null
     private var renderedWidth = -1
     private var emojiPicker: EmojiPickerView? = null
 
@@ -114,6 +116,8 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         }
         state = next
         renderedWidth = width
+        letterKeys.clear()
+        shiftKey = null
         content.removeAllViews()
         val widthDp = if (width > 0) (width / resources.displayMetrics.density).toInt() else resources.configuration.screenWidthDp
         val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -157,28 +161,20 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         state = state?.copy(message = message, recording = recording)
     }
 
-    /** Preserve key instances and in-flight touches when case changes. */
+    /** Preserve key instances and in-flight touches when case changes without tree traversal or relayout. */
     fun updateShift(shifted: Boolean, capsLock: Boolean) {
         val previous = state ?: return
         state = previous.copy(shifted = shifted, capsLock = capsLock)
         if (previous.page != KeyboardPage.LETTERS) return
         val uppercase = shifted || capsLock
-        fun update(view: View) {
-            if (view is KeyboardKeyView) {
-                val spec = view.tag as? KeySpec ?: return
-                if (spec.action == KeyAction.TEXT && spec.output.length == 1 && spec.output[0].isLetter()) {
-                    val value = if (uppercase) spec.output.uppercase() else spec.output.lowercase()
-                    view.tag = spec.copy(label = value, output = value)
-                    if (view.text.toString() != value) view.text = value
-                    view.contentDescription = value
-                } else if (spec.action == KeyAction.SHIFT) {
-                    view.text = if (capsLock) "⇪" else "⇧"
-                }
-            } else if (view is android.view.ViewGroup) {
-                for (i in 0 until view.childCount) update(view.getChildAt(i))
-            }
+        for (key in letterKeys) {
+            val spec = key.tag as? KeySpec ?: continue
+            val value = if (uppercase) spec.output.uppercase() else spec.output.lowercase()
+            if (spec.output != value) key.tag = spec.copy(label = value, output = value)
+            key.text = value
+            key.contentDescription = value
         }
-        update(content)
+        shiftKey?.text = if (capsLock) "⇪" else "⇧"
     }
 
     fun dismissFeedback() {
@@ -232,6 +228,11 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
             KeyAction.PAGE -> "Switch to ${spec.page?.name?.lowercase()}"; KeyAction.SPACE -> "Space"; else -> label
         }, state) { actions.onKey(spec) }
         key.tag = spec
+        if (spec.action == KeyAction.TEXT && spec.output.length == 1 && spec.output[0].isLetter()) {
+            letterKeys.add(key)
+        } else if (spec.action == KeyAction.SHIFT) {
+            shiftKey = key
+        }
         key.setOnClickListener { actions.onKey(key.tag as KeySpec) }
         key.alternate = if (!state.password) spec.alternate else null
         if (spec.action == KeyAction.TEXT && spec.alternate != null) key.onAlternate = {
@@ -239,7 +240,7 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         }
         if (spec.action == KeyAction.DELETE) key.onRepeat = { actions.onKey(spec) }
         if (spec.action == KeyAction.SPACE) {
-            key.typeface = Typeface.create("sans-serif", Typeface.NORMAL); key.textSize = 12f
+            key.textSize = 12f
         }
         if (spec.action == KeyAction.TEXT && state.previews && !state.password) {
             key.onPreview = { view, visible ->
