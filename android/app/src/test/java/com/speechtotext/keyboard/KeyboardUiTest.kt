@@ -61,13 +61,16 @@ class KeyboardUiTest {
         key.dispatchTouchEvent(MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, 10f, 10f, 0))
         assertTrue(key.isPressed)
         assertEquals(HapticFeedbackConstants.KEYBOARD_TAP, shadowOf(key).lastHapticFeedbackPerformed())
-        val preview = descendants(surface).first { it.contentDescription == "Pressed key preview" }
+        val preview = descendants(surface).first { it.contentDescription == "Pressed key preview" } as KeyPreviewView
         assertEquals(View.VISIBLE, preview.visibility)
-        assertEquals("a", (preview as android.widget.TextView).text.toString())
+        assertEquals("a", preview.label.toString())
+        assertFalse("Showing key preview must not trigger keyboard relayout", surface.isLayoutRequested)
         key.dispatchTouchEvent(MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP, 10f, 10f, 0))
         // No main-loop idle: insertion must happen in the release callback itself.
         assertEquals("a", editor.text.toString())
         shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(200))
+        assertEquals(View.INVISIBLE, preview.visibility)
+        assertFalse("Hiding key preview must not trigger keyboard relayout", surface.isLayoutRequested)
         assertFalse(key.isPressed)
         assertEquals("a", editor.text.toString())
     }
@@ -97,8 +100,8 @@ class KeyboardUiTest {
         assertSame(space, key(surface, " "))
         assertTrue(space.isPressed)
         letter.dispatchTouchEvent(MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, 10f, 10f, 0))
-        val preview = descendants(surface).first { it.contentDescription == "Pressed key preview" } as android.widget.TextView
-        assertEquals("A", preview.text.toString())
+        val preview = descendants(surface).first { it.contentDescription == "Pressed key preview" } as KeyPreviewView
+        assertEquals("A", preview.label.toString())
         letter.dispatchTouchEvent(MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP, 10f, 10f, 0))
         shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100))
         surface.updateShift(false, false)
@@ -145,7 +148,7 @@ class KeyboardUiTest {
         val now = SystemClock.uptimeMillis()
         key.dispatchTouchEvent(MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, 10f, 10f, 0))
         assertNotEquals(HapticFeedbackConstants.KEYBOARD_TAP, shadowOf(key).lastHapticFeedbackPerformed())
-        assertEquals(View.GONE, descendants(surface).first { it.contentDescription == "Pressed key preview" }.visibility)
+        assertEquals(View.INVISIBLE, descendants(surface).first { it.contentDescription == "Pressed key preview" }.visibility)
     }
 
     @Test fun `underscore backslash comparison and math symbols insert their actual label`() {
