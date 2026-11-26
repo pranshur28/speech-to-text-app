@@ -26,6 +26,7 @@ class SpeechKeyboardService : InputMethodService() {
     private var composingStart = -1
     private var expectedSelection = -1
     private var selectionStart = -1
+    private var selectionEnd = -1
     private var segmentPrefix = ""
 
     override fun onCreateInputView(): View {
@@ -47,6 +48,7 @@ class SpeechKeyboardService : InputMethodService() {
         super.onStartInput(attribute, restarting)
         editor = attribute
         selectionStart = attribute?.initialSelStart ?: -1
+        selectionEnd = attribute?.initialSelEnd ?: -1
         password = EditorPolicy.isPassword(attribute?.inputType ?: 0)
         page = if (EditorPolicy.isNumeric(attribute?.inputType ?: 0)) KeyboardPage.NUMBERS else KeyboardPage.LETTERS
         capsLock = false
@@ -84,6 +86,7 @@ class SpeechKeyboardService : InputMethodService() {
                                    candidatesStart: Int, candidatesEnd: Int) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         selectionStart = newSelStart
+        selectionEnd = newSelEnd
         if (session != null && EditorPolicy.cursorLeftDictation(newSelStart, newSelEnd, expectedSelection, candidatesEnd)) {
             cancelDictation()
             setStatus("Cursor moved — tap Mic to continue")
@@ -145,7 +148,8 @@ class SpeechKeyboardService : InputMethodService() {
     private fun delete() {
         cancelDictationForEditing()
         val connection = currentInputConnection ?: return
-        TextEditing.backspace(connection)
+        val hasSelection = if (selectionStart >= 0 && selectionEnd >= 0) selectionStart != selectionEnd else null
+        TextEditing.backspace(connection, hasSelection)
     }
 
     private fun enter() {
@@ -217,6 +221,7 @@ class SpeechKeyboardService : InputMethodService() {
             // Commit the current composing region, without synthetic deletes or clipboard writes.
             connection.finishComposingText()
             selectionStart = expectedSelection
+            selectionEnd = expectedSelection
             composing = ""; segmentPrefix = ""; composingStart = -1
         }
     }
