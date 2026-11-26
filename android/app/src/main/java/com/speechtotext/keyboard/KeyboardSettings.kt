@@ -20,6 +20,9 @@ class KeyboardSettings(context: Context) {
     var previews: Boolean
         get() = prefs.getBoolean("previews", true)
         set(value) { prefs.edit().putBoolean("previews", value).apply() }
+    var suggestions: Boolean
+        get() = prefs.getBoolean("suggestions", true)
+        set(value) { prefs.edit().putBoolean("suggestions", value).apply() }
     var splitLayout: String
         get() = prefs.getString("split_layout", "auto") ?: "auto"
         set(value) { prefs.edit().putString("split_layout", value).apply() }

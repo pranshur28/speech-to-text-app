@@ -69,6 +69,7 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         fun onSettings()
         fun onSwitchKeyboard()
         fun onMic()
+        fun onSuggestion(word: String) { }
     }
     data class State(
         val page: KeyboardPage,
@@ -90,6 +91,10 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
     private var status: TextView? = null
     private var inlineScroll: HorizontalScrollView? = null
     private var inlineContainer: LinearLayout? = null
+    private var suggestionRow: LinearLayout? = null
+    private val suggestionChips = mutableListOf<KeyboardKeyView>()
+    private var hasSuggestions = false
+    private var hasInlineAutofill = false
     private var mic: KeyboardKeyView? = null
     private val letterKeys = mutableListOf<KeyboardKeyView>()
     private var shiftKey: KeyboardKeyView? = null
@@ -122,6 +127,9 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         state = next
         renderedWidth = width
         letterKeys.clear()
+        suggestionChips.clear()
+        hasSuggestions = false
+        hasInlineAutofill = false
         shiftKey = null
         content.removeAllViews()
         val widthDp = if (width > 0) (width / resources.displayMetrics.density).toInt() else resources.configuration.screenWidthDp
@@ -154,6 +162,26 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
             visibility = View.GONE
             contentDescription = "Inline autofill suggestions"
             addView(inlineContainer, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        }.also { centerSlot.addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
+        suggestionRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            visibility = View.INVISIBLE
+            contentDescription = "Word suggestions"
+            for (slot in 0 until 3) {
+                val chip = KeyboardKeyView(context).apply {
+                    keyStyle = KeyStyle.TOOLBAR
+                    textSize = 13f
+                    feedbackEnabled = next.haptics
+                    visibility = View.INVISIBLE
+                    setOnClickListener {
+                        val word = text.toString()
+                        if (word.isNotEmpty()) actions.onSuggestion(word)
+                    }
+                }
+                suggestionChips.add(chip)
+                addView(chip, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+            }
         }.also { centerSlot.addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
         toolbar.addView(centerSlot, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 4f))
         mic = control(
@@ -191,6 +219,7 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
             mic?.keyStyle = if (recording) KeyStyle.MIC_ACTIVE else KeyStyle.MIC
         }
         state = state?.copy(message = message, recording = recording)
+        syncTopStripVisibility()
     }
 
     /** Display an inflated Android Inline Autofill chip inside the top toolbar strip. */
@@ -201,15 +230,39 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
             marginEnd = dp(6)
         }
         container.addView(chip, lp)
-        inlineScroll?.visibility = View.VISIBLE
-        status?.visibility = View.GONE
+        hasInlineAutofill = true
+        syncTopStripVisibility()
     }
 
-    /** Clear inline autofill chips and restore the status strip. */
+    /** Clear inline autofill chips and restore the status or suggestion strip. */
     fun clearInlineSuggestions() {
         inlineContainer?.removeAllViews()
-        inlineScroll?.visibility = View.GONE
-        status?.visibility = View.VISIBLE
+        hasInlineAutofill = false
+        syncTopStripVisibility()
+    }
+
+    /** Update the 3 pre-allocated suggestion chips without triggering a keyboard relayout. */
+    fun updateSuggestions(words: List<String>) {
+        hasSuggestions = words.isNotEmpty()
+        for (i in suggestionChips.indices) {
+            val chip = suggestionChips[i]
+            val word = words.getOrNull(i).orEmpty()
+            chip.text = word
+            chip.contentDescription = if (word.isNotEmpty()) "Insert $word" else ""
+            val targetVis = if (word.isNotEmpty()) View.VISIBLE else View.INVISIBLE
+            if (chip.visibility != targetVis) chip.visibility = targetVis
+        }
+        syncTopStripVisibility()
+    }
+
+    private fun syncTopStripVisibility() {
+        val inlineVis = if (hasInlineAutofill) View.VISIBLE else View.GONE
+        if (inlineScroll?.visibility != inlineVis) inlineScroll?.visibility = inlineVis
+        val showSuggestions = !hasInlineAutofill && hasSuggestions && state?.recording != true
+        val suggestionVis = if (showSuggestions) View.VISIBLE else View.INVISIBLE
+        if (suggestionRow?.visibility != suggestionVis) suggestionRow?.visibility = suggestionVis
+        val statusVis = if (!hasInlineAutofill && !showSuggestions) View.VISIBLE else View.INVISIBLE
+        if (status?.visibility != statusVis) status?.visibility = statusVis
     }
 
     /** Preserve key instances and in-flight touches when case changes without tree traversal or relayout. */

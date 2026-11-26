@@ -306,4 +306,36 @@ class KeyboardUiTest {
         assertEquals(View.GONE, strip.visibility)
         assertFalse(descendants(strip).contains(chip))
     }
+
+    @Test fun `suggestion strip updates without relayout and dispatches tapped word`() {
+        val picked = mutableListOf<String>()
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val surface = KeyboardSurface(activity, object : KeyboardSurface.Actions {
+            override fun onKey(spec: KeySpec) { }
+            override fun onSettings() { }
+            override fun onSwitchKeyboard() { }
+            override fun onMic() { }
+            override fun onSuggestion(word: String) { picked.add(word) }
+        })
+        activity.setContentView(surface)
+        surface.render(state())
+        val width = (activity.resources.configuration.screenWidthDp * activity.resources.displayMetrics.density).toInt()
+        surface.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        surface.layout(0, 0, width, surface.measuredHeight)
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        surface.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        surface.layout(0, 0, width, surface.measuredHeight)
+
+        surface.updateSuggestions(listOf("hello", "help", "here"))
+        assertFalse("Showing suggestions must not trigger keyboard relayout", surface.isLayoutRequested)
+        val bar = descendants(surface).first { it.contentDescription == "Word suggestions" }
+        assertEquals(View.VISIBLE, bar.visibility)
+        val firstChip = descendants(bar).filterIsInstance<KeyboardKeyView>().first { it.text.toString() == "hello" }
+        firstChip.performClick()
+        assertEquals(listOf("hello"), picked)
+
+        surface.updateSuggestions(emptyList())
+        assertEquals(View.INVISIBLE, bar.visibility)
+        assertFalse("Clearing suggestions must not trigger keyboard relayout", surface.isLayoutRequested)
+    }
 }
