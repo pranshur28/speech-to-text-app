@@ -239,4 +239,30 @@ class KeyboardUiTest {
         assertFalse(KeyboardSettings(context).haptics)
         assertEquals("off", KeyboardSettings(context).splitLayout)
     }
+
+    @Test fun `keys have edge-to-edge hit targets, no ripple drawable, and tolerate touch-slop drift`() {
+        val (surface, editor) = create()
+        val key = key(surface, "a")
+        val params = key.layoutParams as android.widget.LinearLayout.LayoutParams
+        assertEquals(0, params.leftMargin)
+        assertEquals(0, params.topMargin)
+        assertEquals(0, params.rightMargin)
+        assertEquals(0, params.bottomMargin)
+        assertNull("Key background should be canvas-drawn rather than a RippleDrawable", key.background)
+
+        val now = SystemClock.uptimeMillis()
+        // Edge tap (1px from corner) with slight drift inside touchSlop still commits on release.
+        key.dispatchTouchEvent(MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, 1f, 1f, 0))
+        key.dispatchTouchEvent(MotionEvent.obtain(now, now + 20, MotionEvent.ACTION_MOVE, -2f, 1f, 0))
+        assertTrue(key.isPressed)
+        key.dispatchTouchEvent(MotionEvent.obtain(now, now + 40, MotionEvent.ACTION_UP, -2f, 1f, 0))
+        assertEquals("a", editor.text.toString())
+
+        // Dragging well outside touchSlop cancels the tap without inserting.
+        key.dispatchTouchEvent(MotionEvent.obtain(now + 100, now + 100, MotionEvent.ACTION_DOWN, 5f, 5f, 0))
+        key.dispatchTouchEvent(MotionEvent.obtain(now + 100, now + 120, MotionEvent.ACTION_MOVE, -100f, 5f, 0))
+        assertFalse(key.isPressed)
+        key.dispatchTouchEvent(MotionEvent.obtain(now + 100, now + 140, MotionEvent.ACTION_UP, -100f, 5f, 0))
+        assertEquals("a", editor.text.toString())
+    }
 }

@@ -271,8 +271,7 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         setOnClickListener { action() }
     }
 
-    private fun weighted(weight: Float) = LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, weight).apply {
-        setMargins(dp(2), dp(3), dp(2), dp(3))
-    }
+    // Visual key spacing is drawn inside KeyboardKeyView so key hit targets stay edge-to-edge with zero dead zones.
+    private fun weighted(weight: Float) = LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, weight)
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 }
