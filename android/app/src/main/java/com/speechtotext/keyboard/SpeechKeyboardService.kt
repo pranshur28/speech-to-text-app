@@ -1,15 +1,30 @@
 package com.speechtotext.keyboard
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Color
+import android.graphics.drawable.Icon
 import android.inputmethodservice.InputMethodService
+import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
 import android.text.InputType
+import android.util.Size
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InlineSuggestionsRequest
+import android.view.inputmethod.InlineSuggestionsResponse
 import android.view.inputmethod.InputMethodManager
+import android.widget.inline.InlinePresentationSpec
+import androidx.annotation.RequiresApi
+import androidx.autofill.inline.UiVersions
+import androidx.autofill.inline.common.TextViewStyle
+import androidx.autofill.inline.common.ViewStyle
+import androidx.autofill.inline.v1.InlineSuggestionUi
 
 class SpeechKeyboardService : InputMethodService() {
     private var page = KeyboardPage.LETTERS
@@ -21,6 +36,7 @@ class SpeechKeyboardService : InputMethodService() {
     private var root: KeyboardSurface? = null
     private var session: DictationSession? = null
     private var generation = 0L
+    private var inlineGeneration = 0L
     private var stopping = false
     private var composing = ""
     private var composingStart = -1
@@ -45,6 +61,7 @@ class SpeechKeyboardService : InputMethodService() {
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         cancelDictation()
+        clearInlineSuggestions()
         super.onStartInput(attribute, restarting)
         editor = attribute
         selectionStart = attribute?.initialSelStart ?: -1
@@ -66,7 +83,7 @@ class SpeechKeyboardService : InputMethodService() {
     }
 
     override fun onFinishInput() {
-        cancelDictation(); root?.dismissFeedback()
+        cancelDictation(); clearInlineSuggestions(); root?.dismissFeedback()
         super.onFinishInput()
         editor = null
     }
@@ -244,6 +261,69 @@ class SpeechKeyboardService : InputMethodService() {
 
     private fun openSettings() {
         startActivity(Intent(this, SetupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    @SuppressLint("RestrictedApi")
+    override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest {
+        val density = resources.displayMetrics.density
+        fun px(dp: Int) = (dp * density).toInt()
+        val chipStyle = InlineSuggestionUi.newStyleBuilder()
+            .setSingleIconChipStyle(
+                ViewStyle.Builder()
+                    .setBackground(Icon.createWithResource(this, R.drawable.bg_inline_chip))
+                    .setPadding(px(8), px(4), px(8), px(4))
+                    .build()
+            )
+            .setChipStyle(
+                ViewStyle.Builder()
+                    .setBackground(Icon.createWithResource(this, R.drawable.bg_inline_chip))
+                    .setPadding(px(12), px(4), px(12), px(4))
+                    .build()
+            )
+            .setTitleStyle(
+                TextViewStyle.Builder()
+                    .setTextColor(Color.rgb(242, 244, 248))
+                    .setTextSize(13f)
+                    .build()
+            )
+            .setSubtitleStyle(
+                TextViewStyle.Builder()
+                    .setTextColor(Color.rgb(154, 164, 184))
+                    .setTextSize(11f)
+                    .build()
+            )
+            .build()
+        val stylesBundle = UiVersions.newStylesBuilder().addStyle(chipStyle).build()
+        val spec = InlinePresentationSpec.Builder(Size(px(56), px(34)), Size(px(260), px(36)))
+            .setStyle(stylesBundle)
+            .build()
+        return InlineSuggestionsRequest.Builder(listOf(spec))
+            .setMaxSuggestionCount(InlineSuggestionsRequest.SUGGESTION_COUNT_UNLIMITED)
+            .build()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    override fun onInlineSuggestionsResponse(response: InlineSuggestionsResponse): Boolean {
+        val token = ++inlineGeneration
+        root?.clearInlineSuggestions()
+        val suggestions = response.inlineSuggestions
+        if (suggestions.isEmpty()) return true
+        val heightPx = (36 * resources.displayMetrics.density).toInt()
+        val size = Size(ViewGroup.LayoutParams.WRAP_CONTENT, heightPx)
+        for (suggestion in suggestions) {
+            suggestion.inflate(this, size, mainExecutor) { view ->
+                if (view != null && inlineGeneration == token) {
+                    root?.addInlineSuggestionView(view)
+                }
+            }
+        }
+        return true
+    }
+
+    private fun clearInlineSuggestions() {
+        inlineGeneration++
+        root?.clearInlineSuggestions()
     }
 
     private fun setStatus(value: String) { root?.updateStatus(value, session != null) }

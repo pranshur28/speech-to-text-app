@@ -15,6 +15,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.emoji2.emojipicker.EmojiPickerView
@@ -87,6 +88,8 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
     private val hidePreview = Runnable { preview.visibility = View.INVISIBLE }
     private var state: State? = null
     private var status: TextView? = null
+    private var inlineScroll: HorizontalScrollView? = null
+    private var inlineContainer: LinearLayout? = null
     private var mic: KeyboardKeyView? = null
     private val letterKeys = mutableListOf<KeyboardKeyView>()
     private var shiftKey: KeyboardKeyView? = null
@@ -135,11 +138,24 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         content.addView(toolbar, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(46)))
         toolbar.addView(control("⋯", "Keyboard settings", next, KeyStyle.TOOLBAR) { actions.onSettings() }, weighted(0.95f))
         toolbar.addView(control("🌐", "Switch keyboard", next, KeyStyle.TOOLBAR) { actions.onSwitchKeyboard() }, weighted(0.95f))
+        val centerSlot = FrameLayout(context)
         status = TextView(context).apply {
             text = next.message; textSize = 11.5f; setTextColor(Color.rgb(148, 158, 178))
             gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), 0, dp(8), 0)
             maxLines = 2
-        }.also { toolbar.addView(it, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 4f)) }
+        }.also { centerSlot.addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
+        inlineContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), 0, dp(4), 0)
+        }
+        inlineScroll = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            visibility = View.GONE
+            contentDescription = "Inline autofill suggestions"
+            addView(inlineContainer, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        }.also { centerSlot.addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)) }
+        toolbar.addView(centerSlot, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 4f))
         mic = control(
             if (next.recording) "Stop" else "Mic",
             "Start or stop dictation",
@@ -175,6 +191,25 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
             mic?.keyStyle = if (recording) KeyStyle.MIC_ACTIVE else KeyStyle.MIC
         }
         state = state?.copy(message = message, recording = recording)
+    }
+
+    /** Display an inflated Android Inline Autofill chip inside the top toolbar strip. */
+    fun addInlineSuggestionView(chip: View) {
+        val container = inlineContainer ?: return
+        (chip.parent as? android.view.ViewGroup)?.removeView(chip)
+        val lp = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+            marginEnd = dp(6)
+        }
+        container.addView(chip, lp)
+        inlineScroll?.visibility = View.VISIBLE
+        status?.visibility = View.GONE
+    }
+
+    /** Clear inline autofill chips and restore the status strip. */
+    fun clearInlineSuggestions() {
+        inlineContainer?.removeAllViews()
+        inlineScroll?.visibility = View.GONE
+        status?.visibility = View.VISIBLE
     }
 
     /** Preserve key instances and in-flight touches when case changes without tree traversal or relayout. */
