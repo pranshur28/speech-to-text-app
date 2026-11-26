@@ -2,12 +2,15 @@ package com.speechtotext.keyboard
 
 import android.content.Context
 import android.content.res.Configuration
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Build
 import android.os.Looper
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
@@ -15,6 +18,45 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.emoji2.emojipicker.EmojiPickerView
+
+/** Lightweight preview badge that draws directly on Canvas so text changes never trigger layout. */
+internal class KeyPreviewView(context: Context) : View(context) {
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 32f, resources.displayMetrics)
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+    }
+
+    var label: CharSequence = ""
+        set(value) {
+            if (field.toString() == value.toString()) return
+            field = value
+            invalidate()
+        }
+
+    init {
+        background = GradientDrawable().apply {
+            cornerRadius = 12 * resources.displayMetrics.density
+            setColor(Color.rgb(73, 91, 121))
+        }
+        visibility = INVISIBLE
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        contentDescription = "Pressed key preview"
+        isClickable = false
+        isFocusable = false
+        elevation = 6 * resources.displayMetrics.density
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val text = label.toString()
+        if (text.isEmpty()) return
+        val metrics = textPaint.fontMetrics
+        val baseline = height / 2f - (metrics.ascent + metrics.descent) / 2f
+        canvas.drawText(text, width / 2f, baseline, textPaint)
+    }
+}
 
 /** Rendering and touch feedback are isolated from editor/microphone state. */
 @android.annotation.SuppressLint("ViewConstructor") // Constructed by the IME with editor callbacks, not XML.
@@ -38,15 +80,9 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
         val message: String,
     )
     private val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    private val preview = TextView(context).apply {
-        textSize = 32f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
-        background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(Color.rgb(73, 91, 121)) }
-        visibility = View.GONE; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        contentDescription = "Pressed key preview"
-        isClickable = false; isFocusable = false; elevation = dp(6).toFloat()
-    }
+    private val preview = KeyPreviewView(context)
     private val handler = Handler(Looper.getMainLooper())
-    private val hidePreview = Runnable { preview.visibility = View.GONE }
+    private val hidePreview = Runnable { preview.visibility = View.INVISIBLE }
     private var state: State? = null
     private var status: TextView? = null
     private var mic: KeyboardKeyView? = null
@@ -74,7 +110,7 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
 
     fun render(next: State) {
         if (state?.page != next.page) {
-            handler.removeCallbacks(hidePreview); preview.visibility = View.GONE
+            handler.removeCallbacks(hidePreview); preview.visibility = View.INVISIBLE
         }
         state = next
         renderedWidth = width
@@ -147,7 +183,7 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
 
     fun dismissFeedback() {
         handler.removeCallbacksAndMessages(null)
-        preview.visibility = View.GONE
+        preview.visibility = View.INVISIBLE
         fun clear(view: View) {
             if (view is KeyboardKeyView) view.cancelInteraction()
             if (view is android.view.ViewGroup) for (i in 0 until view.childCount) clear(view.getChildAt(i))
@@ -162,7 +198,7 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
 
     override fun onDetachedFromWindow() {
         handler.removeCallbacksAndMessages(null)
-        preview.visibility = View.GONE
+        preview.visibility = View.INVISIBLE
         super.onDetachedFromWindow()
     }
 
@@ -209,12 +245,18 @@ class KeyboardSurface(context: Context, private val actions: Actions) : FrameLay
             key.onPreview = { view, visible ->
                 handler.removeCallbacks(hidePreview)
                 if (visible && isAttachedToWindow) {
-                    val keyPosition = IntArray(2); val position = IntArray(2)
-                    view.getLocationInWindow(keyPosition); getLocationInWindow(position)
-                    preview.text = view.text
-                    preview.translationX = (keyPosition[0] - position[0] + view.width / 2f - dp(29)).coerceIn(0f, (width - dp(58)).coerceAtLeast(0).toFloat())
-                    preview.translationY = (keyPosition[1] - position[1] - dp(58)).coerceAtLeast(0).toFloat()
-                    preview.visibility = View.VISIBLE
+                    var offsetX = 0f
+                    var offsetY = 0f
+                    var current: View? = view
+                    while (current != null && current !== this) {
+                        offsetX += current.left + current.translationX
+                        offsetY += current.top + current.translationY
+                        current = current.parent as? View
+                    }
+                    preview.label = view.text
+                    preview.translationX = (offsetX + view.width / 2f - dp(29)).coerceIn(0f, (width - dp(58)).coerceAtLeast(0).toFloat())
+                    preview.translationY = (offsetY - dp(58)).coerceAtLeast(0f)
+                    if (preview.visibility != View.VISIBLE) preview.visibility = View.VISIBLE
                 } else handler.postDelayed(hidePreview, 100)
             }
         }
