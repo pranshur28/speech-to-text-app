@@ -265,4 +265,30 @@ class KeyboardUiTest {
         key.dispatchTouchEvent(MotionEvent.obtain(now + 100, now + 140, MotionEvent.ACTION_UP, -100f, 5f, 0))
         assertEquals("a", editor.text.toString())
     }
+
+    @Test fun `Matte Graphite theme assigns distinct key styles and updates Shift and Mic styles without relayout`() {
+        val (surface, _) = create()
+        val letter = key(surface, "a")
+        val space = key(surface, " ")
+        val enter = descendants(surface).filterIsInstance<KeyboardKeyView>()
+            .first { (it.tag as? KeySpec)?.action == KeyAction.ENTER }
+        val shift = descendants(surface).filterIsInstance<KeyboardKeyView>()
+            .first { (it.tag as? KeySpec)?.action == KeyAction.SHIFT }
+        val mic = descendants(surface).filterIsInstance<KeyboardKeyView>()
+            .first { it.contentDescription == "Start or stop dictation" }
+
+        assertEquals(KeyStyle.LETTER, letter.keyStyle)
+        assertEquals(KeyStyle.SPACE, space.keyStyle)
+        assertEquals(KeyStyle.ACTION, enter.keyStyle)
+        assertEquals(KeyStyle.MODIFIER, shift.keyStyle)
+        assertEquals(KeyStyle.MIC, mic.keyStyle)
+
+        surface.updateShift(shifted = true, capsLock = false)
+        assertEquals(KeyStyle.MODIFIER_ACTIVE, shift.keyStyle)
+        surface.updateShift(shifted = true, capsLock = true)
+        assertEquals(KeyStyle.ACTION, shift.keyStyle)
+        surface.updateStatus("Listening…", recording = true)
+        assertEquals(KeyStyle.MIC_ACTIVE, mic.keyStyle)
+        assertFalse(surface.isLayoutRequested)
+    }
 }
