@@ -44,6 +44,8 @@ class SpeechKeyboardService : InputMethodService() {
     private var selectionStart = -1
     private var selectionEnd = -1
     private var segmentPrefix = ""
+    private val currentWord = StringBuilder()
+    private val dictionary by lazy { WordDictionary(this) }
 
     override fun onCreateInputView(): View {
         return KeyboardSurface(this, object : KeyboardSurface.Actions {
@@ -54,6 +56,7 @@ class SpeechKeyboardService : InputMethodService() {
                 getSystemService(InputMethodManager::class.java).showInputMethodPicker()
             }
             override fun onMic() { toggleMic() }
+            override fun onSuggestion(word: String) { applySuggestion(word) }
         }).also { root = it; rebuild() }
     }
 
@@ -62,6 +65,7 @@ class SpeechKeyboardService : InputMethodService() {
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         cancelDictation()
         clearInlineSuggestions()
+        clearWordBuffer()
         super.onStartInput(attribute, restarting)
         editor = attribute
         selectionStart = attribute?.initialSelStart ?: -1
@@ -83,7 +87,7 @@ class SpeechKeyboardService : InputMethodService() {
     }
 
     override fun onFinishInput() {
-        cancelDictation(); clearInlineSuggestions(); root?.dismissFeedback()
+        cancelDictation(); clearInlineSuggestions(); clearWordBuffer(); root?.dismissFeedback()
         super.onFinishInput()
         editor = null
     }
@@ -155,7 +159,11 @@ class SpeechKeyboardService : InputMethodService() {
 
     private fun type(value: String) {
         cancelDictationForEditing()
-        if (currentInputConnection?.commitText(value, 1) != true) setStatus("Tap a text field first")
+        if (currentInputConnection?.commitText(value, 1) != true) {
+            setStatus("Tap a text field first")
+            return
+        }
+        updateWordBufferOnType(value)
         if (shift && !capsLock && value.any { it.isLetter() }) {
             shift = false
             root?.updateShift(shift, capsLock)
@@ -167,10 +175,17 @@ class SpeechKeyboardService : InputMethodService() {
         val connection = currentInputConnection ?: return
         val hasSelection = if (selectionStart >= 0 && selectionEnd >= 0) selectionStart != selectionEnd else null
         TextEditing.backspace(connection, hasSelection)
+        if (hasSelection == true) {
+            clearWordBuffer()
+        } else if (currentWord.isNotEmpty()) {
+            currentWord.deleteCharAt(currentWord.length - 1)
+            refreshSuggestions()
+        }
     }
 
     private fun enter() {
         cancelDictationForEditing()
+        commitWordToDictionary()
         val info = editor ?: return
         val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
         if (info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION == 0 &&
@@ -319,6 +334,54 @@ class SpeechKeyboardService : InputMethodService() {
             }
         }
         return true
+    }
+
+    private fun applySuggestion(word: String) {
+        cancelDictationForEditing()
+        val connection = currentInputConnection ?: return
+        if (currentWord.isNotEmpty()) {
+            connection.deleteSurroundingText(currentWord.length, 0)
+        }
+        connection.commitText("$word ", 1)
+        if (!password) dictionary.recordWord(word)
+        clearWordBuffer()
+        if (shift && !capsLock) {
+            shift = false
+            root?.updateShift(shift, capsLock)
+        }
+    }
+
+    private fun updateWordBufferOnType(value: String) {
+        if (password || !KeyboardSettings(this).suggestions) {
+            clearWordBuffer()
+            return
+        }
+        if (value.length == 1 && (value[0].isLetter() || value[0] == '\'' || value[0] == '-')) {
+            if (currentWord.length < 40) currentWord.append(value)
+            refreshSuggestions()
+        } else {
+            commitWordToDictionary()
+        }
+    }
+
+    private fun commitWordToDictionary() {
+        if (!password && currentWord.length >= 2 && KeyboardSettings(this).suggestions) {
+            dictionary.recordWord(currentWord.toString())
+        }
+        clearWordBuffer()
+    }
+
+    private fun refreshSuggestions() {
+        if (password || currentWord.isEmpty() || !KeyboardSettings(this).suggestions) {
+            root?.updateSuggestions(emptyList())
+            return
+        }
+        root?.updateSuggestions(dictionary.suggest(currentWord.toString(), limit = 3))
+    }
+
+    private fun clearWordBuffer() {
+        currentWord.setLength(0)
+        root?.updateSuggestions(emptyList())
     }
 
     private fun clearInlineSuggestions() {

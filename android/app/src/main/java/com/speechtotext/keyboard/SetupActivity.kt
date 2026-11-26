@@ -115,6 +115,24 @@ class SetupActivity : Activity() {
             isChecked = settings.previews
             setOnCheckedChangeListener { _, enabled -> settings.previews = enabled }
         })
+        body.addView(Switch(this).apply {
+            text = "On-device word suggestions and learning (disabled in passwords)"
+            isChecked = settings.suggestions
+            setOnCheckedChangeListener { _, enabled -> settings.suggestions = enabled }
+        })
+        button("Import Gboard personal dictionary (.txt or .zip)") {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("text/plain", "application/zip", "application/octet-stream"))
+            }
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, REQ_IMPORT_GBOARD)
+        }
+        button("Clear learned words and shortcuts") {
+            WordDictionary(this).clearLearned()
+            Toast.makeText(this, "Cleared local dictionary and shortcuts", Toast.LENGTH_SHORT).show()
+        }
         text("Split layout")
         body.addView(Spinner(this).apply {
             adapter = ArrayAdapter(this@SetupActivity, android.R.layout.simple_spinner_dropdown_item,
@@ -155,5 +173,28 @@ class SetupActivity : Activity() {
             getString(if (mic) R.string.allowed else R.string.not_allowed))
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_IMPORT_GBOARD && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            try {
+                contentResolver.openInputStream(uri)?.use { stream ->
+                    val result = WordDictionary(this).importStream(stream)
+                    Toast.makeText(
+                        this,
+                        "Imported ${result.wordsImported} words and ${result.shortcutsImported} shortcuts",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            } catch (_: Exception) {
+                Toast.makeText(this, "Could not read Gboard dictionary file.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    companion object { private const val REQ_IMPORT_GBOARD = 2001 }
 }
