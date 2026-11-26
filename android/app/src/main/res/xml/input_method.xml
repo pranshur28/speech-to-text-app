@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:settingsActivity="com.speechtotext.keyboard.SetupActivity"
-    android:supportsSwitchingToNextInputMethod="true">
+    android:supportsSwitchingToNextInputMethod="true"
+    android:supportsInlineSuggestions="true"
+    tools:targetApi="30">
     <subtype android:label="@string/keyboard_language" android:imeSubtypeLocale="en_US" android:imeSubtypeMode="keyboard" />
 </input-method>

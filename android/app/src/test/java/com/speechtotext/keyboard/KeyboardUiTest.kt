@@ -291,4 +291,19 @@ class KeyboardUiTest {
         assertEquals(KeyStyle.MIC_ACTIVE, mic.keyStyle)
         assertFalse(surface.isLayoutRequested)
     }
+
+    @Test fun `inline autofill strip displays chips and restores status when cleared`() {
+        val (surface, _) = create()
+        val strip = descendants(surface).first { it.contentDescription == "Inline autofill suggestions" }
+        assertEquals(View.GONE, strip.visibility)
+
+        val chip = android.widget.TextView(surface.context).apply { text = "user@example.com" }
+        surface.addInlineSuggestionView(chip)
+        assertEquals(View.VISIBLE, strip.visibility)
+        assertTrue(descendants(strip).contains(chip))
+
+        surface.clearInlineSuggestions()
+        assertEquals(View.GONE, strip.visibility)
+        assertFalse(descendants(strip).contains(chip))
+    }
 }
