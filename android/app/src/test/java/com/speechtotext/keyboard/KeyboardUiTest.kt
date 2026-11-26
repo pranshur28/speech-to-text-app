@@ -212,6 +212,21 @@ class KeyboardUiTest {
         editor.setText("hello"); editor.setSelection(1, 4)
         TextEditing.backspace(connection)
         assertEquals("ho", editor.text.toString())
+
+        // Known collapsed cursor skips the synchronous getSelectedText IPC round-trip.
+        var getSelectedCalls = 0
+        val spy = object : android.view.inputmethod.InputConnectionWrapper(connection, true) {
+            override fun getSelectedText(flags: Int): CharSequence? {
+                getSelectedCalls++
+                return super.getSelectedText(flags)
+            }
+        }
+        editor.setText("abc\r\n"); editor.setSelection(editor.length())
+        TextEditing.backspace(spy, hasSelection = false)
+        assertEquals("abc", editor.text.toString())
+        TextEditing.backspace(spy, hasSelection = false)
+        assertEquals("ab", editor.text.toString())
+        assertEquals(0, getSelectedCalls)
     }
 
     @Test fun `editing keyboard preferences leaves the previously saved credential untouched`() {
