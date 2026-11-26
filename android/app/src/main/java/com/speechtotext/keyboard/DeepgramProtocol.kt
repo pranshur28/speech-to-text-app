@@ -17,9 +17,9 @@ object DeepgramProtocol {
             .addQueryParameter("model", if (engine == SttEngine.FLUX) "flux-general-en" else "nova-3")
             .addQueryParameter("encoding", "linear16")
             .addQueryParameter("sample_rate", SAMPLE_RATE.toString())
-            .addQueryParameter("channels", "1")
         if (engine == SttEngine.NOVA) {
-            builder.addQueryParameter("punctuate", "true")
+            builder.addQueryParameter("channels", "1")
+                .addQueryParameter("punctuate", "true")
                 .addQueryParameter("smart_format", "true")
                 .addQueryParameter("dictation", "true")
                 .addQueryParameter("interim_results", "true")
@@ -27,6 +27,9 @@ object DeepgramProtocol {
         }
         return builder.build().toString().replaceFirst("https:", "wss:")
     }
+
+    fun flushMessage(engine: SttEngine): String =
+        if (engine == SttEngine.FLUX) """{"type":"ForceEndTurn"}""" else """{"type":"Finalize"}"""
 
     fun transcript(engine: SttEngine, message: JSONObject): TranscriptEvent? {
         if (engine == SttEngine.FLUX) {

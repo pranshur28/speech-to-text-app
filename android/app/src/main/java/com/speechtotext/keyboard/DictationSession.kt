@@ -141,7 +141,7 @@ class DictationSession(
             audio?.release()
             recorder = null
             if (stopping.get() && !finished.get()) {
-                if (!webSocket.send("{\"type\":\"Finalize\"}")) finish(null)
+                if (!webSocket.send(DeepgramProtocol.flushMessage(engine))) finish(null)
             }
         }
     }

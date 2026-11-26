@@ -11,14 +11,18 @@ class DeepgramProtocolTest {
         assertTrue(url.contains("encoding=linear16"))
         assertTrue(url.contains("sample_rate=16000"))
         assertEquals(2560, DeepgramProtocol.CHUNK_BYTES)
+        assertFalse("Flux v2 rejects channels query parameter with HTTP 400", url.contains("channels="))
         assertFalse(url.contains("smart_format"))
+        assertEquals("""{"type":"ForceEndTurn"}""", DeepgramProtocol.flushMessage(SttEngine.FLUX))
     }
 
     @Test fun `Nova enables dictation and interim results`() {
         val url = DeepgramProtocol.url(SttEngine.NOVA)
         assertTrue(url.contains("/v1/listen?"))
+        assertTrue(url.contains("channels=1"))
         assertTrue(url.contains("interim_results=true"))
         assertTrue(url.contains("dictation=true"))
+        assertEquals("""{"type":"Finalize"}""", DeepgramProtocol.flushMessage(SttEngine.NOVA))
     }
 
     @Test fun `Flux updates remain composing until end of turn`() {
